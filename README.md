@@ -16,7 +16,9 @@ ni PostgreSQL nécessaire.
 **Prérequis :** Docker (Desktop/Engine + Compose v2). Aucune autre installation.
 
 ```bash
-cp .env.example .env          # premières valeurs de dev correctes
+sh scripts/bootstrap-ci-env.sh       # génère .env.dev (valeurs de dev non secrètes, SECRET_KEY aléatoire)
+# ou : cp .env.example .env.dev puis remplir — DJANGO_SECRET_KEY et POSTGRES_PASSWORD sont obligatoires
+#      (variables absentes => démarrage refusé : fail-fast, aucun secret de repli en dur).
 
 docker compose build          # build de l'image web (jamais poussée vers un registry)
 docker compose up             # web sur http://localhost:8000 + db PostgreSQL

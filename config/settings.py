@@ -10,17 +10,30 @@ import os
 from datetime import timedelta
 from pathlib import Path
 
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 load_dotenv(BASE_DIR / ".env")
 
-SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "dev-insecure-change-me")
-DEBUG = os.getenv("DJANGO_DEBUG", "True").lower() == "true"
+
+def _required(name: str) -> str:
+    """Return a non-empty env var or fail fast — no insecure fallback values."""
+    value = os.getenv(name)
+    if not value:
+        raise ImproperlyConfigured(
+            f"{name} is not set — provide it in .env.dev or .env.prod "
+            "(copy .env.example and fill the values)."
+        )
+    return value
+
+
+SECRET_KEY = _required("DJANGO_SECRET_KEY")
+DEBUG = (os.getenv("DJANGO_DEBUG") or "False").lower() == "true"
 ALLOWED_HOSTS = [
     host.strip()
-    for host in os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+    for host in (os.getenv("DJANGO_ALLOWED_HOSTS") or "localhost,127.0.0.1").split(",")
     if host.strip()
 ]
 
@@ -74,11 +87,11 @@ ASGI_APPLICATION = "config.asgi.application"
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.getenv("POSTGRES_DB", "fobos"),
-        "USER": os.getenv("POSTGRES_USER", "fobos"),
-        "PASSWORD": os.getenv("POSTGRES_PASSWORD", "fobos"),
-        "HOST": os.getenv("POSTGRES_HOST", "db"),
-        "PORT": os.getenv("POSTGRES_PORT", "5432"),
+        "NAME": _required("POSTGRES_DB"),
+        "USER": _required("POSTGRES_USER"),
+        "PASSWORD": _required("POSTGRES_PASSWORD"),
+        "HOST": os.getenv("POSTGRES_HOST") or "db",
+        "PORT": os.getenv("POSTGRES_PORT") or "5432",
     }
 }
 
@@ -99,8 +112,8 @@ REST_FRAMEWORK = {
 }
 
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(hours=int(os.getenv("JWT_ACCESS_HOURS", "4"))),
-    "REFRESH_TOKEN_LIFETIME": timedelta(days=int(os.getenv("JWT_REFRESH_DAYS", "7"))),
+    "ACCESS_TOKEN_LIFETIME": timedelta(hours=int(os.getenv("JWT_ACCESS_HOURS") or "4")),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=int(os.getenv("JWT_REFRESH_DAYS") or "7")),
     "AUTH_HEADER_TYPES": ("Bearer",),
 }
 
@@ -108,23 +121,23 @@ SIMPLE_JWT = {
 # checkout→ledger chain runs without Backend Dev B's real adapters. Set to False
 # (or in production) once the real BitLibera/Blink adapters are registered.
 FOBOS_USE_DEMO_ADAPTERS = (
-    os.getenv("FOBOS_USE_DEMO_ADAPTERS", "true" if DEBUG else "false").lower() == "true"
-)
+    os.getenv("FOBOS_USE_DEMO_ADAPTERS") or ("true" if DEBUG else "false")
+).lower() == "true"
 
 # Email verification link
 EMAIL_VERIFICATION_MAX_AGE_SECONDS = int(
-    os.getenv("EMAIL_VERIFICATION_MAX_AGE_SECONDS", str(60 * 60 * 24))
+    os.getenv("EMAIL_VERIFICATION_MAX_AGE_SECONDS") or str(60 * 60 * 24)
 )
-APP_BASE_URL = os.getenv("APP_BASE_URL", "http://localhost:8000")
+APP_BASE_URL = os.getenv("APP_BASE_URL") or "http://localhost:8000"
 
 # Email
-EMAIL_BACKEND = os.getenv("EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")
-EMAIL_HOST = os.getenv("EMAIL_HOST", "")
-EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
-EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
-EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
-EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "True").lower() == "true"
-DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "fobos@example.com")
+EMAIL_BACKEND = os.getenv("EMAIL_BACKEND") or "django.core.mail.backends.console.EmailBackend"
+EMAIL_HOST = os.getenv("EMAIL_HOST") or ""
+EMAIL_PORT = int(os.getenv("EMAIL_PORT") or "587")
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER") or ""
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD") or ""
+EMAIL_USE_TLS = (os.getenv("EMAIL_USE_TLS") or "True").lower() == "true"
+DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL") or "fobos@example.com"
 
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"

@@ -18,8 +18,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Create .env from example
-        run: cp .env.example .env.dev
+      - name: Create .env.dev for CI
+        run: sh scripts/bootstrap-ci-env.sh
       - name: Build image
         run: docker compose build web
         working-directory: .
@@ -30,8 +30,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Create .env from example
-        run: cp .env.example .env.dev
+      - name: Create .env.dev for CI
+        run: sh scripts/bootstrap-ci-env.sh
       - name: Build image
         run: docker compose build web
       - name: Ruff check
@@ -49,8 +49,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Create .env from example
-        run: cp .env.example .env.dev
+      - name: Create .env.dev for CI
+        run: sh scripts/bootstrap-ci-env.sh
       - name: Build image
         run: docker compose build web
       - name: pip-audit
@@ -62,8 +62,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Create .env from example
-        run: cp .env.example .env.dev
+      - name: Create .env.dev for CI
+        run: sh scripts/bootstrap-ci-env.sh
       - name: Build images
         run: docker compose build
       - name: Run pytest with coverage
@@ -85,8 +85,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Create .env from example
-        run: cp .env.example .env.dev
+      - name: Create .env.dev for CI
+        run: sh scripts/bootstrap-ci-env.sh
       - name: Build image
         run: docker compose build web
       - name: Trivy scan image
