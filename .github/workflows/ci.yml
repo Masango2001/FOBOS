@@ -57,8 +57,10 @@ jobs:
         run: docker compose run --rm --no-deps web pip-audit -r requirements/dev.txt
 
   # 4. Tests + coverage report (threshold in pyproject.toml).
-  tests:
-    name: Tests (pytest + coverage)
+  # Job id + name must be exactly "test": the repo Rulesets require this exact
+  # status check context before merging develop/main.
+  test:
+    name: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
