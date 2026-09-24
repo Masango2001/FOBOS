@@ -121,3 +121,65 @@ def test_login_works_after_verification(client: APIClient) -> None:
     assert token["role"] == "owner"
     assert token["business_id"] == business.id
     assert token["email_verified"] is True
+
+
+@pytest.mark.django_db
+@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+def test_owner_creates_cashier_with_verification_email(owner_client: APIClient) -> None:
+    response = owner_client.post(
+        "/auth/cashiers",
+        {
+            "name": "Bob",
+            "email": "bob@example.com",
+            "phone": "+25771111111",
+            "password": "supersecret123",
+        },
+        format="json",
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["role"] == "cashier"
+    assert body["email_verified"] is False
+    assert "password" not in body
+    user = User.objects.get(email="bob@example.com")
+    assert user.role == User.Role.CASHIER
+    assert user.business_id == body["business"]
+    assert len(mail.outbox) == 1
+    message = mail.outbox[0]
+    if not isinstance(message, EmailMultiAlternatives):
+        pytest.fail("expected an EmailMultiAlternatives message")
+    html = str(message.alternatives[0][0])
+    assert "http://localhost:8000/auth/verify-email/" in html
+
+
+@pytest.mark.django_db
+def test_cashier_cannot_create_cashier(cashier_client: APIClient) -> None:
+    response = cashier_client.post(
+        "/auth/cashiers",
+        {"name": "Carol", "email": "carol@example.com", "password": "supersecret123"},
+        format="json",
+    )
+    assert response.status_code == 403
+
+
+@pytest.mark.django_db
+def test_unauthenticated_cannot_create_cashier(client: APIClient) -> None:
+    response = client.post(
+        "/auth/cashiers",
+        {"name": "Dave", "email": "dave@example.com", "password": "supersecret123"},
+        format="json",
+    )
+    assert response.status_code == 401
+
+
+@pytest.mark.django_db
+def test_owner_cannot_create_cashier_with_duplicate_email(owner_client: APIClient) -> None:
+    User.objects.create_user(email="erin@example.com", name="Erin", password="supersecret123")
+    response = owner_client.post(
+        "/auth/cashiers",
+        {"name": "Erin", "email": "erin@example.com", "password": "supersecret123"},
+        format="json",
+    )
+    assert response.status_code == 400
+    assert "already exists" in str(response.json()["email"])

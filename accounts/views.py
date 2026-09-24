@@ -1,3 +1,5 @@
+from typing import cast
+
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404
 from django.template.loader import render_to_string
@@ -7,7 +9,12 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import User
-from .serializers import ResendVerificationSerializer, SignupSerializer
+from .permissions import IsOwner
+from .serializers import (
+    CashierCreateSerializer,
+    ResendVerificationSerializer,
+    SignupSerializer,
+)
 from .services import send_verification_email, verify_verification_token
 
 
@@ -33,6 +40,17 @@ class VerifyEmailView(APIView):
         user.email_verified_at = timezone_now()
         user.save(update_fields=["email_verified", "email_verified_at"])
         return HttpResponse(render_to_string("accounts/email_verified.html"))
+
+
+class CashierCreateView(generics.CreateAPIView):
+    """POST /auth/cashiers — owner-only: create a cashier for their business."""
+
+    serializer_class = CashierCreateSerializer
+    permission_classes = [permissions.IsAuthenticated, IsOwner]
+
+    def perform_create(self, serializer) -> None:
+        request_user = cast(User, self.request.user)
+        serializer.save(business=request_user.business)
 
 
 class ResendVerificationView(APIView):

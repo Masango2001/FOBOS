@@ -80,6 +80,39 @@ class SignupSerializer(serializers.Serializer):
         return user
 
 
+class CashierCreateSerializer(serializers.ModelSerializer):
+    """Owner creates a cashier for their business — email verified before first login."""
+
+    password = serializers.CharField(write_only=True, min_length=8)
+
+    class Meta:
+        model = User
+        fields = [
+            "id",
+            "name",
+            "email",
+            "phone",
+            "role",
+            "business",
+            "email_verified",
+            "password",
+        ]
+        read_only_fields = ["role", "business", "email_verified"]
+
+    def create(self, validated_data: dict) -> User:
+        password = validated_data.pop("password")
+        user = User.objects.create_user(
+            email=validated_data["email"],
+            name=validated_data["name"],
+            password=password,
+            phone=validated_data.get("phone", ""),
+            role=User.Role.CASHIER,
+            business=validated_data["business"],
+        )
+        send_verification_email(user.pk, user.email)
+        return user
+
+
 class FobosTokenObtainPairSerializer(TokenObtainPairSerializer):
     """JWT pair that refuses unverified emails and embeds the role claim (§4)."""
 
