@@ -74,6 +74,47 @@ class Product(models.Model):
         return self.name
 
 
+class StockMovement(models.Model):
+    """Append-only immutable stock movement ledger (LOT 1).
+
+    Every stock change (sale, restock, adjustment, return) is recorded here,
+    in the SAME transaction as the `Product.stock_qty` update. `qty_after` is
+    stored (auditability) and must equal the resulting stock. Rows are never
+    updated (no UPDATE path exists in the API).
+    """
+
+    class MovementType(models.TextChoices):
+        SALE = "sale", "sale"
+        RESTOCK = "restock", "restock"
+        ADJUSTMENT = "adjustment", "adjustment"
+        RETURN = "return", "return"
+
+    id = models.UUIDField(primary_key=True, default=_uuid.uuid4, editable=False)
+    business = models.ForeignKey(Business, on_delete=models.CASCADE, related_name="stock_movements")
+    product = models.ForeignKey(Product, on_delete=models.PROTECT, related_name="stock_movements")
+    type = models.CharField(max_length=16, choices=MovementType.choices)
+    qty_delta = models.IntegerField(help_text="Signed: negative = out, positive = in.")
+    qty_after = models.PositiveIntegerField(help_text="Resulting stock after this movement.")
+    reference = models.CharField(
+        max_length=64,
+        null=True,
+        blank=True,
+        help_text="order_id / financial_event_id / invoice_id.",
+    )
+    reason = models.CharField(max_length=255, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        indexes = [
+            models.Index(fields=["business", "product", "-created_at"]),
+            models.Index(fields=["business", "type", "-created_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.type} {self.qty_delta:+d} → {self.qty_after} ({self.product_id})"
+
+
 class Customer(models.Model):
     """MVP-skip table: exists in schema, no logic yet (Tech Spec §2)."""
 
