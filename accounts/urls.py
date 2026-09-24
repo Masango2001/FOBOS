@@ -4,7 +4,13 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView
 
 from .serializers import EmailNotVerifiedError, FobosTokenObtainPairSerializer
-from .views import CashierCreateView, ResendVerificationView, SignupView, VerifyEmailView
+from .views import (
+    CashierDetailView,
+    CashierListCreateView,
+    ResendVerificationView,
+    SignupView,
+    VerifyEmailView,
+)
 
 
 class FobosTokenObtainPairView(TokenObtainPairView):
@@ -26,7 +32,8 @@ class FobosTokenObtainPairView(TokenObtainPairView):
 urlpatterns = [
     path("signup", SignupView.as_view(), name="auth-signup"),
     path("login", FobosTokenObtainPairView.as_view(), name="auth-login"),
-    path("cashiers", CashierCreateView.as_view(), name="auth-cashiers"),
+    path("cashiers", CashierListCreateView.as_view(), name="auth-cashiers"),
+    path("cashiers/<uuid:pk>", CashierDetailView.as_view(), name="auth-cashiers-detail"),
     path(
         "verify-email/<str:token>/",
         VerifyEmailView.as_view(),

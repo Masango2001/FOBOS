@@ -57,6 +57,31 @@ le contrat (Tech Spec §4 / AGENTS.md) et l'implémentation, puis la décision r
   d'équipe n'y figure pas), décidée pour permettre un vrai mode caissier
   multipliée sans passer par l'admin/shell.
 
+### 4.1 Gestion des caissiers (GET / PATCH / PUT / DELETE)
+
+Extension de la gestion d'équipe, mêmes règles d'accès **owner uniquement**
+(403 caissier, 401 non authentifié), isolée par business :
+
+- `GET /auth/cashiers` — liste les caissiers du business appelant
+  (`role=cashier`) ; jamais l'owner ni les caissiers d'un autre business.
+  Réponse : tableau de `{ id, name, email, phone, role, business,
+  email_verified }`.
+- `GET /auth/cashiers/<uuid:pk>` — détail d'un caissier (404 si inconnu,
+  autre business, ou si pk = l'owner lui-même).
+- `PATCH /auth/cashiers/<uuid:pk>` — mise à jour partielle de `name`,
+  `email`, `phone`, `password` (tous optionnels).
+- `PUT /auth/cashiers/<uuid:pk>` — remplacement de `name`, `email`, `phone`
+  (champs requis : `name` + `email` ; `password` optionnel).
+
+Règles : `role`, `business` et `email_verified` sont **non modifiables**.
+Changer `email` réinitialise `email_verified=false` et renvoie un lien de
+vérification au nouveau courriel (re-verification obligatoire avant login).
+`password` passé ⇒ re-haché. Email dupliqué ⇒ 400 « already exists ».
+- `DELETE /auth/cashiers/<uuid:pk>` — suppression **dure** (204) : l'historique
+  des ventes est préservé (`sale.cashier` passe à `NULL`, FK `SET_NULL`,
+  `sales/models.py`). Les tokens JWT du caissier supprimé cessent de fonctionner
+  (user introuvable à la résolution du token).
+
 ## 5. Contrat caissier Frontend — 4 points reçus et traités
 
 Le Frontend a soumis un contrat caissier (workflow Lumicash-OTP). Points et

@@ -67,6 +67,18 @@ Hooks configurés : ruff (lint + format), mypy, `trailing-whitespace`, `end-of-f
 - `POST /auth/login` — **refusé tant que l'email n'est pas vérifié** ; le JWT porte le
   claim `role` (`owner`/`cashier`) et `business_id`.
 
+## Gestion des caissiers (owner uniquement)
+
+L'owner gère l'équipe de son business (isolé par business, 403 pour un caissier) :
+
+- `POST /auth/cashiers` — crée un caissier (`role=cashier`, `email_verified=false`) et
+  envoie un email de vérification (login bloqué tant que non vérifié).
+- `GET /auth/cashiers` — liste les caissiers du business ; `GET /auth/cashiers/<uuid:pk>` — détail.
+- `PATCH` / `PUT /auth/cashiers/<uuid:pk>` — met à jour `name`, `email`, `phone`,
+  `password` (optionnel). Changer l'email réinitialise la vérification (`email_verified=false`)
+  et renvoie un lien de vérification. `role` et `business` ne sont pas modifiables.
+- `DELETE /auth/cashiers/<uuid:pk>` — supprime le compte (historique des ventes préservé).
+
 En dev, l'email « part » dans la console du serveur (backend console). Pour l'envoi réel,
 renseignez `EMAIL_BACKEND`/`EMAIL_HOST_*` dans `.env`.
 

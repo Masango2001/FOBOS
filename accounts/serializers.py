@@ -113,6 +113,48 @@ class CashierCreateSerializer(serializers.ModelSerializer):
         return user
 
 
+class CashierSerializer(serializers.ModelSerializer):
+    """Read + update (PUT/PATCH) of an owner's cashier — password optional on update.
+
+    `role`, `business` and `email_verified` are read-only: an owner cannot promote a
+    cashier, move them to another business, or skip email verification. Changing the
+    email resets `email_verified` and sends a fresh verification link.
+    """
+
+    password = serializers.CharField(write_only=True, required=False, min_length=8)
+
+    class Meta:
+        model = User
+        fields = [
+            "id",
+            "name",
+            "email",
+            "phone",
+            "role",
+            "business",
+            "email_verified",
+            "password",
+        ]
+        read_only_fields = ["id", "role", "business", "email_verified"]
+
+    def update(self, instance: User, validated_data: dict) -> User:
+        password = validated_data.pop("password", None)
+        email_changed = "email" in validated_data and validated_data["email"].lower() != (
+            instance.email.lower()
+        )
+        for field, value in validated_data.items():
+            setattr(instance, field, value)
+        if password:
+            instance.set_password(password)
+        if email_changed:
+            instance.email_verified = False
+            instance.email_verified_at = None
+        instance.save()
+        if email_changed:
+            send_verification_email(instance.pk, instance.email)
+        return instance
+
+
 class FobosTokenObtainPairSerializer(TokenObtainPairSerializer):
     """JWT pair that refuses unverified emails and embeds the role claim (§4)."""
 

@@ -183,3 +183,207 @@ def test_owner_cannot_create_cashier_with_duplicate_email(owner_client: APIClien
     )
     assert response.status_code == 400
     assert "already exists" in str(response.json()["email"])
+
+
+def _make_other_business_cashier() -> User:
+    other_owner = User.objects.create_user(
+        email="other-owner@example.com", name="Other", password="supersecret123"
+    )
+    other_business = Business.objects.create(name="Other shop", owner=other_owner)
+    other_owner.business = other_business
+    other_owner.save(update_fields=["business"])
+    return User.objects.create_user(
+        email="other-cashier@example.com",
+        name="Other cashier",
+        password="supersecret123",
+        role=User.Role.CASHIER,
+        email_verified=True,
+        business=other_business,
+    )
+
+
+@pytest.mark.django_db
+def test_owner_lists_only_own_cashiers(owner_client: APIClient, cashier: User) -> None:
+    _make_other_business_cashier()
+
+    response = owner_client.get("/auth/cashiers")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert [c["email"] for c in body] == [cashier.email]
+    assert body[0]["role"] == "cashier"
+    assert body[0]["business"] == str(cashier.business_id)
+    assert "password" not in body[0]
+
+
+@pytest.mark.django_db
+def test_owner_gets_cashier_detail(owner_client: APIClient, cashier: User) -> None:
+    response = owner_client.get(f"/auth/cashiers/{cashier.pk}")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["id"] == str(cashier.pk)
+    assert body["email"] == cashier.email
+    assert body["role"] == "cashier"
+
+
+@pytest.mark.django_db
+def test_owner_patches_cashier(owner_client: APIClient, cashier: User) -> None:
+    response = owner_client.patch(
+        f"/auth/cashiers/{cashier.pk}",
+        {"name": "Bob le caissier", "phone": "+25770000099"},
+        format="json",
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["name"] == "Bob le caissier"
+    assert body["phone"] == "+25770000099"
+    assert body["email"] == cashier.email
+    cashier.refresh_from_db()
+    assert cashier.name == "Bob le caissier"
+    assert cashier.phone == "+25770000099"
+
+
+@pytest.mark.django_db
+def test_owner_puts_cashier(owner_client: APIClient, cashier: User) -> None:
+    response = owner_client.put(
+        f"/auth/cashiers/{cashier.pk}",
+        {"name": "Carol", "email": cashier.email, "phone": "+25772222222"},
+        format="json",
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["name"] == "Carol"
+    assert body["phone"] == "+25772222222"
+    cashier.refresh_from_db()
+    assert cashier.name == "Carol"
+    assert cashier.check_password("supersecret123")
+
+
+@pytest.mark.django_db
+def test_owner_updates_cashier_password(owner_client: APIClient, cashier: User) -> None:
+    response = owner_client.patch(
+        f"/auth/cashiers/{cashier.pk}", {"password": "newpassword123"}, format="json"
+    )
+
+    assert response.status_code == 200
+    assert "password" not in response.json()
+    cashier.refresh_from_db()
+    assert cashier.check_password("newpassword123")
+
+
+@pytest.mark.django_db
+@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+def test_owner_changes_cashier_email_resends_verification(
+    owner_client: APIClient, cashier: User
+) -> None:
+    response = owner_client.patch(
+        f"/auth/cashiers/{cashier.pk}", {"email": "renewed@example.com"}, format="json"
+    )
+
+    assert response.status_code == 200
+    assert response.json()["email_verified"] is False
+    cashier.refresh_from_db()
+    assert cashier.email == "renewed@example.com"
+    assert cashier.email_verified is False
+    assert cashier.email_verified_at is None
+    assert len(mail.outbox) == 1
+
+
+@pytest.mark.django_db
+def test_owner_cannot_update_cashier_to_duplicate_email(
+    owner_client: APIClient, cashier: User
+) -> None:
+    User.objects.create_user(email="taken@example.com", name="T", password="supersecret123")
+
+    response = owner_client.patch(
+        f"/auth/cashiers/{cashier.pk}", {"email": "taken@example.com"}, format="json"
+    )
+
+    assert response.status_code == 400
+    assert "already exists" in str(response.json()["email"])
+
+
+@pytest.mark.django_db
+def test_owner_cannot_change_cashier_role_or_business(
+    owner_client: APIClient, cashier: User
+) -> None:
+    response = owner_client.patch(
+        f"/auth/cashiers/{cashier.pk}", {"role": "owner", "business": "hijacked"}, format="json"
+    )
+
+    assert response.status_code == 200
+    cashier.refresh_from_db()
+    assert cashier.role == User.Role.CASHIER
+    assert cashier.business_id is not None
+
+
+@pytest.mark.django_db
+def test_owner_deletes_cashier(owner_client: APIClient, cashier: User) -> None:
+    response = owner_client.delete(f"/auth/cashiers/{cashier.pk}")
+
+    assert response.status_code == 204
+    assert not User.objects.filter(pk=cashier.pk).exists()
+
+
+@pytest.mark.django_db
+def test_owner_cannot_manage_other_business_cashier(owner_client: APIClient) -> None:
+    other_cashier = _make_other_business_cashier()
+
+    assert owner_client.get(f"/auth/cashiers/{other_cashier.pk}").status_code == 404
+    assert (
+        owner_client.patch(
+            f"/auth/cashiers/{other_cashier.pk}", {"name": "Hijack"}, format="json"
+        ).status_code
+        == 404
+    )
+    assert owner_client.delete(f"/auth/cashiers/{other_cashier.pk}").status_code == 404
+    other_cashier.refresh_from_db()
+    assert other_cashier.name == "Other cashier"
+
+
+@pytest.mark.django_db
+def test_owner_cannot_manage_own_account_via_cashier_endpoint(
+    owner_client: APIClient, owner: User
+) -> None:
+    assert (
+        owner_client.patch(
+            f"/auth/cashiers/{owner.pk}", {"name": "Admin"}, format="json"
+        ).status_code
+        == 404
+    )
+    assert owner_client.delete(f"/auth/cashiers/{owner.pk}").status_code == 404
+
+
+@pytest.mark.django_db
+def test_cashier_cannot_read_or_manage_cashiers(cashier_client: APIClient, cashier: User) -> None:
+    assert cashier_client.get("/auth/cashiers").status_code == 403
+    assert cashier_client.get(f"/auth/cashiers/{cashier.pk}").status_code == 403
+    assert (
+        cashier_client.patch(
+            f"/auth/cashiers/{cashier.pk}", {"name": "X"}, format="json"
+        ).status_code
+        == 403
+    )
+    assert (
+        cashier_client.put(
+            f"/auth/cashiers/{cashier.pk}",
+            {"name": "X", "email": cashier.email},
+            format="json",
+        ).status_code
+        == 403
+    )
+    assert cashier_client.delete(f"/auth/cashiers/{cashier.pk}").status_code == 403
+
+
+@pytest.mark.django_db
+def test_unauthenticated_cannot_read_or_manage_cashiers(client: APIClient, cashier: User) -> None:
+    assert client.get("/auth/cashiers").status_code == 401
+    assert client.get(f"/auth/cashiers/{cashier.pk}").status_code == 401
+    assert (
+        client.patch(f"/auth/cashiers/{cashier.pk}", {"name": "X"}, format="json").status_code
+        == 401
+    )
+    assert client.delete(f"/auth/cashiers/{cashier.pk}").status_code == 401

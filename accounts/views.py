@@ -12,6 +12,7 @@ from .models import User
 from .permissions import IsOwner
 from .serializers import (
     CashierCreateSerializer,
+    CashierSerializer,
     ResendVerificationSerializer,
     SignupSerializer,
 )
@@ -42,15 +43,45 @@ class VerifyEmailView(APIView):
         return HttpResponse(render_to_string("accounts/email_verified.html"))
 
 
-class CashierCreateView(generics.CreateAPIView):
-    """POST /auth/cashiers — owner-only: create a cashier for their business."""
+class CashierListCreateView(generics.ListCreateAPIView):
+    """GET/POST /auth/cashiers — owner-only: list or create cashiers of their business.
 
-    serializer_class = CashierCreateSerializer
+    An owner never sees other businesses' cashiers nor their own account here
+    (the queryset is scoped to role=cashier + the owner's business).
+    """
+
+    serializer_class = CashierSerializer
     permission_classes = [permissions.IsAuthenticated, IsOwner]
+
+    def get_serializer_class(self):
+        if self.request.method == "POST":
+            return CashierCreateSerializer
+        return CashierSerializer
+
+    def get_queryset(self):
+        request_user = cast(User, self.request.user)
+        return User.objects.filter(
+            business_id=request_user.business_id, role=User.Role.CASHIER
+        ).order_by("date_joined")
 
     def perform_create(self, serializer) -> None:
         request_user = cast(User, self.request.user)
         serializer.save(business=request_user.business)
+
+
+class CashierDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """GET/PATCH/PUT/DELETE /auth/cashiers/<pk> — owner-only.
+
+    A cashier of another business or the owner's own account resolves to 404
+    (queryset scoped to role=cashier + the owner's business).
+    """
+
+    serializer_class = CashierSerializer
+    permission_classes = [permissions.IsAuthenticated, IsOwner]
+
+    def get_queryset(self):
+        request_user = cast(User, self.request.user)
+        return User.objects.filter(business_id=request_user.business_id, role=User.Role.CASHIER)
 
 
 class ResendVerificationView(APIView):
