@@ -145,6 +145,12 @@ Décision d'architecture validée avec le Frontend/owner :
   sinon correspondance exacte sur le barcode fabricant (ex. EAN numérique) —
   rétro-compatible.
 - `barcode` passe à `max_length=128` (le code généré fait < 120 caractères).
+- **Image du barcode** : `GET /products/<uuid:pk>/barcode` renvoie une image
+  PNG scannable (Code128, `python-barcode` + `Pillow`, `products/services.py`)
+  — lisible/affichable par le front sans lib client. Cache
+  `public, max-age=31536000, immutable` (le code est stable). Owner et caissier
+  y ont accès ; 404 si produit inconnu/autre business/sans barcode, 422 si
+  barcode non-ASCII.
 
 ### 6.3 Cohérences gardées
 

@@ -41,6 +41,24 @@ def build_product_barcode(*, name: str, price: Decimal, product_id) -> str:
     return f"{BARCODE_PREFIX}{encoded}"
 
 
+def render_barcode_png(barcode: str) -> bytes:
+    """Render a scannable Code128 PNG image of a barcode value.
+
+    Uses python-barcode + Pillow (ImageWriter). Code128 supports the full ASCII
+    range, so both FOBOS-generated codes (alphanumeric) and manufacturer codes
+    (e.g. numeric EAN stored as-is) can be drawn.
+    """
+    from barcode import Code128
+    from barcode.writer import ImageWriter
+
+    from io import BytesIO
+
+    img = Code128(barcode, writer=ImageWriter())
+    buf = BytesIO()
+    img.write(buf, options={"module_width": 0.2, "module_height": 12, "write_text": True})
+    return buf.getvalue()
+
+
 def parse_product_barcode(barcode: str) -> BarcodePayload | None:
     """Decode a FOBOS barcode into its payload; None for manufacturer codes."""
     if not barcode.startswith(BARCODE_PREFIX):

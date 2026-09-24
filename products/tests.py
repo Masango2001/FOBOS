@@ -95,3 +95,39 @@ class TestProductRead:
     def test_cashier_can_scan_to_build_cart(self, cashier_client, product):
         response = cashier_client.get("/products/scan/6161")
         assert response.status_code == 200
+
+
+@pytest.mark.django_db
+class TestBarcodeImage:
+    def test_barcode_image_returns_png(self, owner_client, product):
+        response = owner_client.get(f"/products/{product.id}/barcode")
+
+        assert response.status_code == 200
+        assert response["Content-Type"] == "image/png"
+        assert response.content.startswith(b"\x89PNG")
+        assert response["Cache-Control"] == "public, max-age=31536000, immutable"
+
+    def test_barcode_image_works_for_cashier(self, cashier_client, product):
+        response = cashier_client.get(f"/products/{product.id}/barcode")
+        assert response.status_code == 200
+
+    def test_barcode_image_404_for_other_business(self, owner_client, business):
+        from accounts.models import Business
+
+        other = Business.objects.create(name="Other", owner=business.owner)
+        from products.models import Product
+
+        other_product = Product.objects.create(
+            business=other, name="Other item", barcode="1234", unit_price=10
+        )
+        response = owner_client.get(f"/products/{other_product.id}/barcode")
+        assert response.status_code == 404
+
+    def test_barcode_image_404_when_no_barcode(self, owner_client, business):
+        from products.models import Product
+
+        blank = Product.objects.create(
+            business=business, name="No bar", barcode=None, unit_price=10
+        )
+        response = owner_client.get(f"/products/{blank.id}/barcode")
+        assert response.status_code == 404
