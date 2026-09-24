@@ -40,6 +40,9 @@ class ProductListCreateView(generics.ListCreateAPIView):
                     name=product.name, price=product.unit_price, product_id=product.id
                 )
                 product.save(update_fields=["barcode"])
+            # LOT 1 rule 5 (/inventory == sum(qty_delta)) is guaranteed by the
+            # products.post_save signal, which records the initial "restock"
+            # movement for any created product with stock_qty > 0.
         except IntegrityError:
             raise ValidationError(
                 {"barcode": "A product with this barcode already exists for your business."}
