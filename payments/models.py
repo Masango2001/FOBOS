@@ -16,6 +16,7 @@ class Payment(models.Model):
         PENDING = "pending", "pending"
         CONFIRMED = "confirmed", "confirmed"
         FAILED = "failed", "failed"
+        EXPIRED = "expired", "expired"
 
     business = models.ForeignKey(Business, on_delete=models.CASCADE, related_name="payments")
     financial_event = models.ForeignKey(

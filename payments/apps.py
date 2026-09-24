@@ -16,8 +16,13 @@ class PaymentsConfig(AppConfig):
         from django.conf import settings
 
         if getattr(settings, "FOBOS_USE_DEMO_ADAPTERS", False):
-            from .adapters import register_adapter
-            from .demo import DemoBlinkDirectAdapter, DemoBitLiberaOfframpAdapter
+            from .adapters import register_adapter, register_onramp_adapter
+            from .demo import (
+                DemoBitLiberaOnrampAdapter,
+                DemoBlinkDirectAdapter,
+                DemoBitLiberaOfframpAdapter,
+            )
 
             register_adapter(DemoBitLiberaOfframpAdapter())
             register_adapter(DemoBlinkDirectAdapter())
+            register_onramp_adapter(DemoBitLiberaOnrampAdapter())

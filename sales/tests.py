@@ -20,10 +20,11 @@ class TestCheckout:
 
         assert response.status_code == 201
         body = response.json()
-        assert body["rail"] == "bitlibera_offramp"
         assert body["status"] == "pending"
         assert body["payment_request"].startswith("lnbc1")
-        assert body["amount"] == "250.00"
+        assert body["amount_bif"] == 250
+        assert body["amount_sats"] is None
+        assert body["receipt"] is None
 
         payment = Payment.objects.get(order_id=body["order_id"])
         assert payment.status == Payment.Status.PENDING
@@ -35,7 +36,7 @@ class TestCheckout:
             "/cart/checkout", {"amount": "5000.00", "currency": "BIF"}, format="json"
         )
         assert response.status_code == 201
-        assert response.json()["amount"] == "5000.00"
+        assert response.json()["amount_bif"] == 5000
         payment = Payment.objects.get(order_id=response.json()["order_id"])
         assert payment.lines == []
 

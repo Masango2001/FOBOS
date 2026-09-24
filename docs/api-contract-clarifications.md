@@ -56,3 +56,62 @@ le contrat (Tech Spec §4 / AGENTS.md) et l'implémentation, puis la décision r
 - Cet endpoint est une **extension au-delà du contrat §4** (la gestion
   d'équipe n'y figure pas), décidée pour permettre un vrai mode caissier
   multipliée sans passer par l'admin/shell.
+
+## 5. Contrat caissier Frontend — 4 points reçus et traités
+
+Le Frontend a soumis un contrat caissier (workflow Lumicash-OTP). Points et
+décisions :
+
+### 5.1 Chemin du checkout
+
+- **Contrat front** : `POST /cart/checkout`.
+- **Décision** : conforme à la Spec §4 et à l'implémentation existante
+  (`sales/urls.py`). **Aucun changement** : la réponse est celle du §5.2.
+
+### 5.2 `order_id` — généré serveur, retourné par le checkout
+
+- **Contrat** : le body du checkout `{ lines:[{product_id, qty}] | amount }`
+  ne contient **pas** d'`order_id` ; la réponse le renvoie.
+- **Décision** : c'est déjà le cas. `order_id` est généré serveur (uuid4 hex,
+  `payments/services.py`) et sert de clé d'**idempotence** de la confirmation
+  (PRD §32) : le front réutilise l'`order_id` retourné pour le polling
+  (`GET /payments/:id/status`) et pour `payments/onramp/confirm`.
+
+### 5.3 Nouveaux endpoints onramp OTP (Lumicash)
+
+- **Contrat / Spec §4** : `POST /payments/onramp/request-otp
+  { customer_phone, amount }` puis `POST /payments/onramp/confirm
+  { customer_phone, amount, otp, order_id }`.
+- **État initial** : **manquants** dans le backend.
+- **Décision / implémentation** : ajoutés :
+  - `POST /payments/onramp/request-otp` → 200 `{ status: "otp_sent" }`
+    (+ `demo_otp` en mode démo uniquement) ; 503 `adapter_not_installed`
+    si le vrai adapter BitLibera (Backend Dev B) n'est pas enregistré.
+  - `POST /payments/onramp/confirm` → valide l'OTP puis confirme le paiement
+    (`confirm_payment`, idempotent sur `order_id`) ; réponses :
+    - 200 = PaymentSerializer (Shape §5.4) ;
+    - 404 si l'`order_id` est inconnu du business ;
+    - 400 `invalid_otp` si l'OTP est invalide/consommé ;
+    - 503 si l'adapter onramp n'est pas installé ;
+    - un retry après succès renvoie 200 (déjà confirmé) sans réevaluer l'OTP —
+      idempotence sans double écriture ledger.
+- Contrainte d'implémentation : uniquement via l'interface `OnrampAdapter`
+  (`payments/adapters.py`) — le vrai relais BitLibera doit se brancher sans
+  toucher au code métier (`payments/demo.py` = stand-in local).
+
+### 5.4 Formes de réponse + statuts
+
+- **Formes contractuelles** : CheckoutResponse `{ payment_request, order_id,
+  amount_bif, amount_sats?, status, receipt }` ; PaymentStatusResponse
+  `{ order_id, payment_request?, amount_bif?, amount_sats?, lumicash_phone?
+  , status, confirmed_at?, receipt? }`.
+- **Enum de statuts** : `pending | confirmed | failed | expired`.
+- **Décision / implémentation** :
+  - le checkout et `payments/<id>/status` renvoient la forme contractuelle
+    (`PaymentSerializer`, `payments/serializers.py`) ;
+  - `expired` ajouté au modèle (`Status.EXPIRED`) : le status view le déduit
+    quand l'adapter rapporte « expired » — aucune écriture financière.
+    La confirmation reste déclenchée par `confirm_payment` (idempotent) ;
+  - `receipt` : `{ id, content, created_at }` du reçu de la vente, `null`
+    tant que le paiement n'est pas confirmé ;
+  - `lumicash_phone` : présent dès qu'un onramp a été utilisé pour le paiement.

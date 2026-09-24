@@ -51,13 +51,12 @@ class CheckoutView(APIView):
             )
         return Response(
             {
-                "id": payment.id,
-                "payment_request": payment.payment_request,
                 "order_id": payment.order_id,
-                "rail": payment.rail,
+                "payment_request": payment.payment_request,
+                "amount_bif": payment.amount_bif,
+                "amount_sats": payment.amount_sats,
                 "status": payment.status,
-                "amount": f"{payment.total_amount:.2f}",
-                "currency": payment.currency,
+                "receipt": None,
             },
             status=status.HTTP_201_CREATED,
         )

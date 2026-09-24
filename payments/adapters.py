@@ -37,6 +37,22 @@ class AdapterStatus:
     amount_sats: int | None = None
 
 
+@dataclass(frozen=True)
+class AdapterOtpSent:
+    """Result of request_otp — the customer receives an SMS OTP (Lumicash relay)."""
+
+    status: str = "otp_sent"
+    demo_otp: str | None = None
+
+
+class OnrampOtpError(Exception):
+    """OTP mismatch / expired — HTTP 400."""
+
+    def __init__(self, message: str, code: str = "invalid_otp") -> None:
+        super().__init__(message)
+        self.code = code
+
+
 class PaymentRailAdapter(ABC):
     """Common interface so the event handler never branches on rail type (§5)."""
 
@@ -56,7 +72,20 @@ class PaymentRailAdapter(ABC):
     def get_status(self, order_id: str) -> AdapterStatus: ...
 
 
+class OnrampAdapter(ABC):
+    """Lumicash-OTP on-ramp (Tech Spec §4/§8) — real BitLibera proxy belongs to Dev B."""
+
+    rail: str
+
+    @abstractmethod
+    def request_otp(self, *, customer_phone: str, amount: Decimal) -> AdapterOtpSent: ...
+
+    @abstractmethod
+    def confirm_otp(self, *, customer_phone: str, amount: Decimal, otp: str) -> None: ...
+
+
 _REGISTRY: dict[str, PaymentRailAdapter] = {}
+_ONRAMP_REGISTRY: dict[str, OnrampAdapter] = {}
 
 
 def register_adapter(adapter: PaymentRailAdapter) -> None:
@@ -65,6 +94,17 @@ def register_adapter(adapter: PaymentRailAdapter) -> None:
 
 def get_adapter(rail: str) -> PaymentRailAdapter:
     adapter = _REGISTRY.get(rail)
+    if adapter is None:
+        raise AdapterNotInstalled(rail)
+    return adapter
+
+
+def register_onramp_adapter(adapter: OnrampAdapter) -> None:
+    _ONRAMP_REGISTRY[adapter.rail] = adapter
+
+
+def get_onramp_adapter(rail: str) -> OnrampAdapter:
+    adapter = _ONRAMP_REGISTRY.get(rail)
     if adapter is None:
         raise AdapterNotInstalled(rail)
     return adapter

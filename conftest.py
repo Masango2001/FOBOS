@@ -25,11 +25,16 @@ def _make_user(email: str, role: str, business=None, password: str = "supersecre
 @pytest.fixture(autouse=True)
 def _demo_adapters_registered():
     """Register the local demo adapters so the full chain runs without Dev B's."""
-    from payments.adapters import register_adapter
-    from payments.demo import DemoBitLiberaOfframpAdapter, DemoBlinkDirectAdapter
+    from payments.adapters import register_adapter, register_onramp_adapter
+    from payments.demo import (
+        DemoBitLiberaOfframpAdapter,
+        DemoBitLiberaOnrampAdapter,
+        DemoBlinkDirectAdapter,
+    )
 
     register_adapter(DemoBitLiberaOfframpAdapter())
     register_adapter(DemoBlinkDirectAdapter())
+    register_onramp_adapter(DemoBitLiberaOnrampAdapter())
 
 
 @pytest.fixture
