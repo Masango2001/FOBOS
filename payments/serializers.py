@@ -5,6 +5,7 @@ Canonical status enum returned to clients: pending | confirmed | failed | expire
 """
 
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field, inline_serializer
 
 from .models import Payment
 
@@ -28,6 +29,16 @@ class PaymentSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = fields
 
+    @extend_schema_field(
+        inline_serializer(
+            name="ReceiptResponse",
+            fields={
+                "id": serializers.UUIDField(),
+                "content": serializers.JSONField(),
+                "created_at": serializers.DateTimeField(),
+            },
+        )
+    )
     def get_receipt(self, obj: Payment):
         if obj.financial_event_id is None:
             return None

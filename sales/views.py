@@ -1,12 +1,15 @@
 """Sales views — POST /cart/checkout (Tech Spec §4)."""
 
 from django.db import DatabaseError
-from rest_framework import status
+from rest_framework import serializers, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema, inline_serializer
 
 from accounts.permissions import HasBusiness
+from config.openapi import ApiErrorSerializer
 from payments.adapters import AdapterNotInstalled
 from payments.services import CheckoutError, InsufficientStock, create_checkout_payment
 
@@ -18,6 +21,26 @@ class CheckoutView(APIView):
 
     permission_classes = [IsAuthenticated, HasBusiness]
 
+    @extend_schema(
+        request=CheckoutSerializer,
+        responses={
+            201: inline_serializer(
+                name="CheckoutResponse",
+                fields={
+                    "order_id": serializers.CharField(),
+                    "payment_request": serializers.CharField(),
+                    "amount_bif": serializers.IntegerField(allow_null=True),
+                    "amount_sats": serializers.IntegerField(allow_null=True),
+                    "status": serializers.CharField(),
+                    "receipt": serializers.JSONField(allow_null=True),
+                },
+            ),
+            400: OpenApiTypes.OBJECT,
+            409: ApiErrorSerializer,
+            500: ApiErrorSerializer,
+            503: ApiErrorSerializer,
+        },
+    )
     def post(self, request):
         serializer = CheckoutSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)

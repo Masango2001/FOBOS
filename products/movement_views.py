@@ -11,8 +11,11 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
 
 from accounts.permissions import HasBusiness, IsOwner
+from config.openapi import ApiErrorSerializer
 
 from .models import Product, StockMovement
 from .movements import (
@@ -36,6 +39,44 @@ class StockMovementListView(APIView):
 
     permission_classes = [IsAuthenticated, HasBusiness]
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter("product_id", OpenApiTypes.UUID, OpenApiParameter.QUERY),
+            OpenApiParameter(
+                "type",
+                OpenApiTypes.STR,
+                OpenApiParameter.QUERY,
+                enum=list(StockMovement.MovementType.values),
+            ),
+            OpenApiParameter(
+                "limit",
+                {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 200,
+                    "default": 50,
+                },
+                OpenApiParameter.QUERY,
+                description="Page size from 1 to 200; defaults to 50.",
+            ),
+            OpenApiParameter(
+                "cursor",
+                OpenApiTypes.STR,
+                OpenApiParameter.QUERY,
+                description="Opaque cursor returned as next_cursor by the previous page.",
+            ),
+        ],
+        responses={
+            200: inline_serializer(
+                name="StockMovementPage",
+                fields={
+                    "items": StockMovementSerializer(many=True),
+                    "next_cursor": serializers.CharField(allow_null=True),
+                },
+            ),
+            400: OpenApiTypes.OBJECT,
+        },
+    )
     def get(self, request):
         business = request.user.business
         qs = StockMovement.objects.filter(business=business)
@@ -79,6 +120,19 @@ class _StockMutationView(APIView):
     movement_type: StockMovement.MovementType | None = None
     quantity_field = "qty_delta"
 
+    @extend_schema(
+        responses={
+            201: inline_serializer(
+                name="StockMutationResponse",
+                fields={
+                    "movement": StockMovementSerializer(),
+                    "product": ProductSerializer(),
+                },
+            ),
+            400: OpenApiTypes.OBJECT,
+            409: ApiErrorSerializer,
+        }
+    )
     def post(self, request):
         serializer = self.serializer_class(data=request.data)
         serializer.is_valid(raise_exception=True)
