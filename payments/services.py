@@ -107,9 +107,9 @@ def _resolve_cart(
         if quantity <= 0:
             raise CheckoutError("Line quantity must be positive.")
         try:
-            product_id = int(raw["product_id"])
+            product_id = uuid.UUID(str(raw["product_id"]))
         except (KeyError, TypeError, ValueError):
-            raise CheckoutError("Each line needs a 'product_id'.") from None
+            raise CheckoutError("Each line needs a 'product_id' (UUID).") from None
 
         product = Product.objects.filter(business=business, pk=product_id).first()
         if product is None:
@@ -121,7 +121,7 @@ def _resolve_cart(
             )
         snapshots.append(
             {
-                "product_id": product.id,
+                "product_id": str(product.id),
                 "quantity": quantity,
                 "unit_price": str(product.unit_price),
                 "unit_cost": str(product.unit_cost),

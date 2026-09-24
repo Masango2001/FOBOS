@@ -6,6 +6,7 @@ FinancialEvent (guarded at the Sale level, one Sale per confirmed event).
 """
 
 import logging
+import uuid
 from decimal import Decimal
 from typing import Any
 
@@ -107,13 +108,13 @@ def handle_financial_event(event: FinancialEvent) -> Sale:
         Receipt.objects.create(
             sale=sale,
             content={
-                "sale_id": sale.id,
+                "sale_id": str(sale.id),
                 "order_id": payment.order_id,
                 "total_amount": str(sale.total_amount),
                 "currency": sale.currency,
                 "lines": [
                     {
-                        "product_id": line.product_id,
+                        "product_id": str(line.product_id),
                         "quantity": line.quantity,
                         "unit_price": str(line.unit_price),
                     }
@@ -145,13 +146,15 @@ def _payment_backing_q(event: FinancialEvent):
 def _locked_product(event: FinancialEvent, snap: dict[str, Any]):
     from products.models import Product
 
+    try:
+        product_id = uuid.UUID(str(snap["product_id"]))
+    except (KeyError, TypeError, ValueError):
+        raise ValueError(f"Invalid product reference {snap.get('product_id')!r}") from None
     product = (
-        Product.objects.select_for_update()
-        .filter(business=event.business, pk=int(snap["product_id"]))
-        .first()
+        Product.objects.select_for_update().filter(business=event.business, pk=product_id).first()
     )
     if product is None:
-        raise ValueError(f"Product {snap['product_id']} not found for this business")
+        raise ValueError(f"Product {product_id} not found for this business")
     return product
 
 

@@ -10,6 +10,7 @@ asks the provider to SMS an OTP; confirm validates it and confirms the Payment.
 Canonical statuses returned to clients: pending | confirmed | failed | expired.
 """
 
+import uuid
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -34,7 +35,7 @@ ONRAMP_RAIL = "bitlibera_onramp"
 class PaymentStatusView(APIView):
     permission_classes = [IsAuthenticated, HasBusiness]
 
-    def get(self, request, pk: int):
+    def get(self, request, pk: uuid.UUID):
         payment = Payment.objects.filter(business=request.user.business, pk=pk).first()
         if payment is None:
             return Response({"detail": "Payment not found."}, status=status.HTTP_404_NOT_FOUND)

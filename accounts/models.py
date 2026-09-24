@@ -3,6 +3,8 @@ from django.db import models
 
 from .managers import UserManager
 
+import uuid
+
 
 class User(AbstractBaseUser, PermissionsMixin):
     """Custom user — email is the login identifier (Tech Spec §2)."""
@@ -11,6 +13,7 @@ class User(AbstractBaseUser, PermissionsMixin):
         OWNER = "owner", "Owner"
         CASHIER = "cashier", "Cashier"
 
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     email = models.EmailField(unique=True)
     name = models.CharField(max_length=150)
     phone = models.CharField(max_length=30, blank=True, default="")
@@ -44,6 +47,7 @@ class Business(models.Model):
         AS_IS = "as_is", "Receive as-is"
         BIF_LUMICASH = "bif_lumicash", "Auto-convert to BIF"
 
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=150)
     category = models.CharField(max_length=100, blank=True, default="")
     owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="owned_businesses")

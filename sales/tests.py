@@ -1,5 +1,6 @@
 """Checkout→ledger chain: atomicity, idempotency, and read endpoints (Tech Spec §3/§4)."""
 
+import uuid
 from decimal import Decimal
 
 import pytest
@@ -47,7 +48,7 @@ class TestCheckout:
     def test_checkout_rejects_unknown_product(self, owner_client):
         response = owner_client.post(
             "/cart/checkout",
-            {"lines": [{"product_id": 99999, "quantity": 1}]},
+            {"lines": [{"product_id": str(uuid.uuid4()), "quantity": 1}]},
             format="json",
         )
         assert response.status_code == 400

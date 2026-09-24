@@ -11,10 +11,15 @@ from accounts.permissions import HasBusiness, IsOwner
 
 from .models import Product
 from .serializers import ProductSerializer
+from .services import build_product_barcode, parse_product_barcode
 
 
 class ProductListCreateView(generics.ListCreateAPIView):
-    """GET/POST /products — POST is owner-only (inventory is owner mode, §17)."""
+    """GET/POST /products — POST is owner-only (inventory is owner mode, §17).
+
+    A product created without a manufacturer barcode gets a FOBOS-generated one
+    embedding name | unit_price | product id (products/services.py).
+    """
 
     serializer_class = ProductSerializer
     permission_classes = [IsAuthenticated, HasBusiness]
@@ -29,7 +34,12 @@ class ProductListCreateView(generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         try:
-            serializer.save(business=self.request.user.business)
+            product = serializer.save(business=self.request.user.business)
+            if not product.barcode:
+                product.barcode = build_product_barcode(
+                    name=product.name, price=product.unit_price, product_id=product.id
+                )
+                product.save(update_fields=["barcode"])
         except IntegrityError:
             raise ValidationError(
                 {"barcode": "A product with this barcode already exists for your business."}
@@ -37,12 +47,22 @@ class ProductListCreateView(generics.ListCreateAPIView):
 
 
 class ProductScanView(APIView):
-    """GET /products/scan/:barcode — cashier mode needs this to build a cart."""
+    """GET /products/scan/:barcode — cashier mode needs this to build a cart.
+
+    Resolves FOBOS barcodes by their embedded product id (authoritative), then
+    falls back to an exact barcode match for manufacturer codes.
+    """
 
     permission_classes = [IsAuthenticated, HasBusiness]
 
     def get(self, request, barcode: str):
-        product = Product.objects.filter(business=request.user.business, barcode=barcode).first()
+        business = request.user.business
+        product = None
+        payload = parse_product_barcode(barcode)
+        if payload is not None:
+            product = Product.objects.filter(business=business, pk=payload.product_id).first()
+        if product is None:
+            product = Product.objects.filter(business=business, barcode=barcode).first()
         if product is None:
             return Response(
                 {"detail": "No product matches this barcode."},

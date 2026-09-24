@@ -115,3 +115,41 @@ décisions :
   - `receipt` : `{ id, content, created_at }` du reçu de la vente, `null`
     tant que le paiement n'est pas confirmé ;
   - `lumicash_phone` : présent dès qu'un onramp a été utilisé pour le paiement.
+
+## 6. UUID partout + barcode produit auto-généré
+
+Décision d'architecture validée avec le Frontend/owner :
+
+### 6.1 Clés primaires UUID
+
+- **Toutes les tables** passent en `UUIDField(primary_key=True, default=uuid4)`
+  (`accounts`, `products`, `payments`, `sales`, `ledger`, `automation` —
+  y compris Business et User). Migrations régénérées, base récréée, comptes
+  demo `alice@`/`bob@fobos.test` re-créés.
+- **Impact API** :
+  - `product_id` dans `POST /cart/checkout` est désormais un **UUID string** ;
+  - `GET /payments/<uuid:pk>/status` (route `uuid`);
+  - tous les ïds retournés par les endpoints sont des UUID strings ;
+  - JWT : claim `business_id` = UUID string.
+- La contrainte d'unicité `uniq_business_barcode` est inchangée (UUID ⇒
+  collision impossible entre barcodes auto-générés).
+
+### 6.2 Barcode FOBOS auto-généré (content : nom, prix, id)
+
+- **Règle** : un produit créé **sans** barcode fabricant reçoit un barcode
+  FOBOS automatiquement — il encode `name | unit_price | product_id`
+  (`products/services.py`, encodage `F.` + base64url JSON). Autonomie du caissier :
+  le scanner décode le code pour retrouver le produit par son id sans table de
+  correspondance.
+- `GET /products/scan/:barcode` : résout d'abord le payload FOBOS par `id`,
+  sinon correspondance exacte sur le barcode fabricant (ex. EAN numérique) —
+  rétro-compatible.
+- `barcode` passe à `max_length=128` (le code généré fait < 120 caractères).
+
+### 6.3 Cohérences gardées
+
+- Snapshots de panier (`Payment.lines`), reçus (`Receipt.content`) et résultat
+  d'automation stockent les ids en **string UUID** ; `sales/services.py` et
+  `payments/services.py` les re-parse en `uuid.UUID` pour la résolution.
+- Token de vérification d'email : signe l'UUID string (invariant inchangé pour
+  le front).

@@ -7,11 +7,14 @@ DSL — that is explicitly Phase 2.
 
 from django.db import models
 
+import uuid as _uuid
+
 from accounts.models import Business
 from ledger.models import FinancialEvent
 
 
 class AutomationRule(models.Model):
+    id = models.UUIDField(primary_key=True, default=_uuid.uuid4, editable=False)
     business = models.ForeignKey(
         Business, on_delete=models.CASCADE, related_name="automation_rules"
     )
@@ -29,6 +32,7 @@ class AutomationRule(models.Model):
 
 
 class AutomationExecution(models.Model):
+    id = models.UUIDField(primary_key=True, default=_uuid.uuid4, editable=False)
     rule = models.ForeignKey(AutomationRule, on_delete=models.CASCADE, related_name="executions")
     financial_event = models.ForeignKey(
         FinancialEvent,

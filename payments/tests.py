@@ -4,6 +4,7 @@
 - adapter registry / settlement-preference mapping (§5)
 """
 
+import uuid
 from decimal import Decimal
 
 import pytest
@@ -70,7 +71,7 @@ class TestCheckout:
         assert payment.total_amount == Decimal("500.00")
         assert payment.lines == [
             {
-                "product_id": product.id,
+                "product_id": str(product.id),
                 "quantity": 2,
                 "unit_price": "250.00",
                 "unit_cost": "100.00",
@@ -96,7 +97,9 @@ class TestCheckout:
 
     def test_checkout_rejects_unknown_product(self, owner):
         with pytest.raises(CheckoutError):
-            create_checkout_payment(user=owner, lines=[{"product_id": 99999, "quantity": 1}])
+            create_checkout_payment(
+                user=owner, lines=[{"product_id": str(uuid.uuid4()), "quantity": 1}]
+            )
 
     def test_checkout_rejects_insufficient_stock_at_cart_time(self, owner, product):
         with pytest.raises(InsufficientStock):

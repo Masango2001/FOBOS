@@ -4,7 +4,7 @@ from .models import LedgerEntry
 
 
 class LedgerEntrySerializer(serializers.ModelSerializer):
-    financial_event_id = serializers.IntegerField(read_only=True)
+    financial_event_id = serializers.UUIDField(read_only=True)
 
     class Meta:
         model = LedgerEntry

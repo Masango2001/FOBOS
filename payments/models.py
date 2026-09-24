@@ -1,5 +1,7 @@
 """Payment model (Tech Spec §2). Field names are contract — never rename."""
 
+import uuid
+
 from django.db import models
 
 from accounts.models import Business
@@ -18,6 +20,7 @@ class Payment(models.Model):
         FAILED = "failed", "failed"
         EXPIRED = "expired", "expired"
 
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     business = models.ForeignKey(Business, on_delete=models.CASCADE, related_name="payments")
     financial_event = models.ForeignKey(
         FinancialEvent,

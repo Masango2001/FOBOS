@@ -119,7 +119,7 @@ def test_login_works_after_verification(client: APIClient) -> None:
     assert "access" in body and "refresh" in body
     token = AccessToken(body["access"])
     assert token["role"] == "owner"
-    assert token["business_id"] == business.id
+    assert token["business_id"] == str(business.id)
     assert token["email_verified"] is True
 
 
@@ -144,7 +144,7 @@ def test_owner_creates_cashier_with_verification_email(owner_client: APIClient) 
     assert "password" not in body
     user = User.objects.get(email="bob@example.com")
     assert user.role == User.Role.CASHIER
-    assert user.business_id == body["business"]
+    assert str(user.business_id) == body["business"]
     assert len(mail.outbox) == 1
     message = mail.outbox[0]
     if not isinstance(message, EmailMultiAlternatives):

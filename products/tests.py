@@ -2,6 +2,8 @@
 
 import pytest
 
+from products.services import parse_product_barcode
+
 
 @pytest.fixture
 def payload(business):
@@ -36,7 +38,7 @@ class TestProductCreate:
         response = cashier_client.post("/products", payload, format="json")
         assert response.status_code == 403
 
-    def test_barcode_can_be_blank(self, owner_client, business):
+    def test_barcode_can_be_blank_auto_generates_fobos_barcode(self, owner_client, business):
         payload = {
             "name": "No barcode",
             "unit_cost": "10.00",
@@ -45,7 +47,15 @@ class TestProductCreate:
             "stock_threshold": 0,
         }
         response = owner_client.post("/products", payload, format="json")
+
         assert response.status_code == 201
+        barcode = response.json()["barcode"]
+        assert barcode.startswith("F.")
+        decoded = parse_product_barcode(barcode)
+        assert decoded is not None
+        assert decoded.name == "No barcode"
+        assert decoded.price == "30.00"
+        assert decoded.product_id == response.json()["id"]
 
     def test_duplicate_barcode_rejected(self, owner_client, payload, product, business):
         payload["barcode"] = product.barcode
@@ -64,7 +74,19 @@ class TestProductRead:
     def test_scan_by_barcode(self, owner_client, product):
         response = owner_client.get("/products/scan/6161")
         assert response.status_code == 200
-        assert response.json()["id"] == product.id
+        assert response.json()["id"] == str(product.id)
+
+    def test_scan_fobos_barcode_resolves_by_embedded_id(self, owner_client, product):
+        from decimal import Decimal
+
+        from products.services import build_product_barcode
+
+        barcode = build_product_barcode(
+            name=product.name, price=Decimal("250.00"), product_id=product.id
+        )
+        response = owner_client.get(f"/products/scan/{barcode}")
+        assert response.status_code == 200
+        assert response.json()["id"] == str(product.id)
 
     def test_scan_unknown_barcode(self, owner_client):
         response = owner_client.get("/products/scan/9999")

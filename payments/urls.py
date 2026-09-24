@@ -7,7 +7,7 @@ from .views import (
 )
 
 urlpatterns = [
-    path("payments/<int:pk>/status", PaymentStatusView.as_view(), name="payment-status"),
+    path("payments/<uuid:pk>/status", PaymentStatusView.as_view(), name="payment-status"),
     path(
         "payments/onramp/request-otp",
         OnrampRequestOtpView.as_view(),

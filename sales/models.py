@@ -2,6 +2,8 @@
 
 from decimal import Decimal
 
+import uuid as _uuid
+
 from django.db import models
 
 from accounts.models import Business, User
@@ -10,6 +12,7 @@ from products.models import Product
 
 
 class Sale(models.Model):
+    id = models.UUIDField(primary_key=True, default=_uuid.uuid4, editable=False)
     business = models.ForeignKey(Business, on_delete=models.CASCADE, related_name="sales")
     financial_event = models.OneToOneField(
         FinancialEvent,
@@ -40,6 +43,7 @@ class Sale(models.Model):
 
 
 class SaleLine(models.Model):
+    id = models.UUIDField(primary_key=True, default=_uuid.uuid4, editable=False)
     sale = models.ForeignKey(Sale, on_delete=models.CASCADE, related_name="sale_lines")
     product = models.ForeignKey(Product, on_delete=models.PROTECT, related_name="sale_lines")
     quantity = models.PositiveIntegerField()
@@ -54,6 +58,7 @@ class SaleLine(models.Model):
 
 
 class Receipt(models.Model):
+    id = models.UUIDField(primary_key=True, default=_uuid.uuid4, editable=False)
     sale = models.OneToOneField(Sale, on_delete=models.CASCADE, related_name="receipt")
     content = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

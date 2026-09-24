@@ -7,6 +7,8 @@ exist so future migrations land on a stable schema.
 
 from decimal import Decimal
 
+import uuid as _uuid
+
 from django.db import models
 
 from accounts.models import Business
@@ -15,13 +17,14 @@ from accounts.models import Business
 class Product(models.Model):
     """A sellable item. Field names are the Tech Spec §2 contract — never rename."""
 
+    id = models.UUIDField(primary_key=True, default=_uuid.uuid4, editable=False)
     business = models.ForeignKey(Business, on_delete=models.CASCADE, related_name="products")
     name = models.CharField(max_length=200)
     barcode = models.CharField(
-        max_length=64,
+        max_length=128,
         null=True,
         blank=True,
-        help_text="Manufacturer barcode, or system-assigned at inventory onboarding.",
+        help_text="Manufacturer barcode, or FOBOS-generated: base64(name|price|id).",
     )
     unit_cost = models.DecimalField(max_digits=20, decimal_places=2, default=0)
     unit_price = models.DecimalField(max_digits=20, decimal_places=2)
@@ -54,6 +57,7 @@ class Product(models.Model):
 class Customer(models.Model):
     """MVP-skip table: exists in schema, no logic yet (Tech Spec §2)."""
 
+    id = models.UUIDField(primary_key=True, default=_uuid.uuid4, editable=False)
     business = models.ForeignKey(Business, on_delete=models.CASCADE, related_name="customers")
     name = models.CharField(max_length=200)
     phone = models.CharField(max_length=30, blank=True, default="")
@@ -67,6 +71,7 @@ class Customer(models.Model):
 class Supplier(models.Model):
     """MVP-skip table: exists in schema, no logic yet (Tech Spec §2)."""
 
+    id = models.UUIDField(primary_key=True, default=_uuid.uuid4, editable=False)
     business = models.ForeignKey(Business, on_delete=models.CASCADE, related_name="suppliers")
     name = models.CharField(max_length=200)
     phone = models.CharField(max_length=30, blank=True, default="")
@@ -92,6 +97,7 @@ class Invoice(models.Model):
 
     business = models.ForeignKey(Business, on_delete=models.CASCADE, related_name="invoices")
     kind = models.CharField(max_length=10, choices=Kind.choices, default=Kind.CUSTOMER)
+    id = models.UUIDField(primary_key=True, default=_uuid.uuid4, editable=False)
     customer = models.ForeignKey(
         Customer,
         null=True,
@@ -119,6 +125,7 @@ class Invoice(models.Model):
 class Expense(models.Model):
     """MVP-skip table: exists in schema, no logic yet (Tech Spec §2)."""
 
+    id = models.UUIDField(primary_key=True, default=_uuid.uuid4, editable=False)
     business = models.ForeignKey(Business, on_delete=models.CASCADE, related_name="expenses")
     description = models.CharField(max_length=255, blank=True, default="")
     amount = models.DecimalField(max_digits=20, decimal_places=2)

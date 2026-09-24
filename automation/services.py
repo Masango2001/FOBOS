@@ -62,7 +62,7 @@ def run_automation_for_event(event: FinancialEvent) -> list:
             if product.low_stock:
                 low_stock.append(
                     {
-                        "id": product.id,
+                        "id": str(product.id),
                         "name": product.name,
                         "stock_qty": product.stock_qty,
                         "stock_threshold": product.stock_threshold,
@@ -79,7 +79,7 @@ def run_automation_for_event(event: FinancialEvent) -> list:
                 "action": rule.action,
                 "condition": condition,
                 "products": low_stock,
-                "sale_id": sale.id,
+                "sale_id": str(sale.id),
             },
         )
         executions.append(execution)

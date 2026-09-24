@@ -127,7 +127,7 @@ class FobosTokenObtainPairSerializer(TokenObtainPairSerializer):
     def get_token(cls, user: User):  # type: ignore[override]
         token = super().get_token(user)
         token["role"] = user.role
-        token["business_id"] = user.business_id
+        token["business_id"] = str(user.business_id) if user.business_id is not None else None
         token["email_verified"] = user.email_verified
         return token
 

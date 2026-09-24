@@ -1,5 +1,7 @@
 """Ledger models — the financial source of truth (Tech Spec §2, PRD §13/§29)."""
 
+import uuid as _uuid
+
 from django.db import models
 from django.utils import timezone
 
@@ -18,6 +20,8 @@ class FinancialEvent(models.Model):
     Backend Dev B hands us a confirmed event through this model — our event
     handler must never branch on which payment rail produced it.
     """
+
+    id = models.UUIDField(primary_key=True, default=_uuid.uuid4, editable=False)
 
     class EventType(models.TextChoices):
         PAYMENT_CONFIRMED = "PAYMENT_CONFIRMED", "Payment confirmed"
@@ -65,6 +69,7 @@ class LedgerEntry(models.Model):
         CREDIT = "credit", "Credit"
         DEBIT = "debit", "Debit"
 
+    id = models.UUIDField(primary_key=True, default=_uuid.uuid4, editable=False)
     business = models.ForeignKey(Business, on_delete=models.CASCADE, related_name="ledger_entries")
     financial_event = models.ForeignKey(
         FinancialEvent,
