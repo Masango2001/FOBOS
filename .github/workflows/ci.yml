@@ -1,0 +1,100 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - develop
+  push:
+    branches:
+      - develop
+
+env:
+  IMAGE_NAME: fobos-web
+
+jobs:
+  # 1. Docker build — validates the web image builds. NEVER pushed to any registry.
+  docker-build:
+    name: Docker build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create .env.dev for CI
+        run: sh scripts/bootstrap-ci-env.sh
+      - name: Build image
+        run: docker compose build web
+        working-directory: .
+
+  # 2. Code quality — lint, format, static analysis.
+  quality:
+    name: Quality (ruff, mypy, bandit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create .env.dev for CI
+        run: sh scripts/bootstrap-ci-env.sh
+      - name: Build image
+        run: docker compose build web
+      - name: Ruff check
+        run: docker compose run --rm --no-deps web ruff check .
+      - name: Ruff format
+        run: docker compose run --rm --no-deps web ruff format --check .
+      - name: mypy
+        run: docker compose run --rm --no-deps web mypy .
+      - name: Bandit
+        run: docker compose run --rm --no-deps web bandit -c pyproject.toml -r .
+
+  # 3. Dependency vulnerabilities.
+  pip-audit:
+    name: pip-audit deps
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create .env.dev for CI
+        run: sh scripts/bootstrap-ci-env.sh
+      - name: Build image
+        run: docker compose build web
+      - name: pip-audit
+        run: docker compose run --rm --no-deps web pip-audit -r requirements/dev.txt
+
+  # 4. Tests + coverage report (threshold in pyproject.toml).
+  # Job id + name must be exactly "test": the repo Rulesets require this exact
+  # status check context before merging develop/main.
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create .env.dev for CI
+        run: sh scripts/bootstrap-ci-env.sh
+      - name: Build images
+        run: docker compose build
+      - name: Run pytest with coverage
+        run: docker compose run --rm web pytest
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage.xml
+          path: coverage.xml
+      - name: Upload junit artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit.xml
+          path: junit.xml
+
+  # 5. Image vulnerability scan (OS + bundled deps).
+  trivy:
+    name: Trivy image scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create .env.dev for CI
+        run: sh scripts/bootstrap-ci-env.sh
+      - name: Build image
+        run: docker compose build web
+      - name: Trivy scan image
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ env.IMAGE_NAME }}
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          ignore-unfixed: true
