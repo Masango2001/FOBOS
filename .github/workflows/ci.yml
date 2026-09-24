@@ -96,32 +96,3 @@ jobs:
           severity: HIGH,CRITICAL
           exit-code: "1"
           ignore-unfixed: true
-
-  # 6. SonarCloud — centralized quality. Never blocks the merge:
-  #    - the scan step is skipped while SONAR_TOKEN is not defined (repo secret),
-  #    - continue-on-error even if a scan fails once the token exists.
-  sonar:
-    name: SonarCloud
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    needs: tests
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Download coverage artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: coverage.xml
-          path: .
-      - name: Download junit artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: junit.xml
-          path: .
-      - name: SonarCloud Scan
-        uses: SonarSource/sonarqube-scan-action@v5.0.0
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          # SonarCloud uses a fixed host; only SONAR_TOKEN is required as a secret.
-          SONAR_HOST_URL: https://sonarcloud.io
