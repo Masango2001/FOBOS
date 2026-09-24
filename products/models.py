@@ -13,6 +13,20 @@ from django.db import models
 
 from accounts.models import Business
 
+# Sentinel used to mark "the merchant never set a price reference":
+NO_UNIT_PRICE = object()
+
+
+def barcode_image_path(instance, filename):
+    """Deterministic fixed path `barcodes/<product-id>.png`.
+
+    The path never embeds the value digest: `sync_barcode_image` detects change
+    by comparing the *rendered bytes* with the stored ones (idempotent, no
+    recursion) and always overwrites the very same file — so there is exactly
+    one PNG per product, never an orphan. `filename` is ignored.
+    """
+    return f"barcodes/{getattr(instance, 'id', None)}.png"
+
 
 class Product(models.Model):
     """A sellable item. Field names are the Tech Spec §2 contract — never rename."""
@@ -25,6 +39,12 @@ class Product(models.Model):
         null=True,
         blank=True,
         help_text="Manufacturer barcode, or FOBOS-generated: base64(name|price|id).",
+    )
+    barcode_image = models.ImageField(
+        upload_to=barcode_image_path,
+        null=True,
+        blank=True,
+        help_text="Code128 PNG image of `barcode`, persisted on the media volume.",
     )
     unit_cost = models.DecimalField(max_digits=20, decimal_places=2, default=0)
     unit_price = models.DecimalField(max_digits=20, decimal_places=2)

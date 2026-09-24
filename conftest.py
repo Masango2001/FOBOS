@@ -37,6 +37,15 @@ def _demo_adapters_registered():
     register_onramp_adapter(DemoBitLiberaOnrampAdapter())
 
 
+@pytest.fixture(autouse=True)
+def _isolated_media_root(tmp_path):
+    """Keep product barcode images out of the real media volume during tests."""
+    from django.test import override_settings
+
+    with override_settings(MEDIA_ROOT=str(tmp_path / "media"), MEDIA_URL="media/"):
+        yield
+
+
 @pytest.fixture
 def business(db):
     from accounts.models import Business

@@ -1,5 +1,7 @@
 """Product CRUD + barcode endpoints (Tech Spec §4, §8 step 3)."""
 
+from pathlib import Path
+
 import pytest
 
 from products.services import parse_product_barcode
@@ -99,35 +101,65 @@ class TestProductRead:
 
 @pytest.mark.django_db
 class TestBarcodeImage:
-    def test_barcode_image_returns_png(self, owner_client, product):
-        response = owner_client.get(f"/products/{product.id}/barcode")
+    def test_creating_product_persists_png_and_returns_url(self, owner_client, owner):
+        response = owner_client.post(
+            "/products",
+            {"name": "Juice", "unit_cost": "80.00", "unit_price": "200.00", "stock_qty": 20},
+            format="json",
+        )
 
+        assert response.status_code == 201
+        body = response.json()
+        assert body["barcode_image_url"].startswith("http://testserver/media/barcodes/")
+        assert body["barcode_image_url"].endswith(".png")
+
+        from pathlib import Path
+
+        from django.conf import settings
+
+        product = owner.business.products.get(id=body["id"])
+        assert product.barcode_image.name == f"barcodes/{product.id}.png"
+        path = (Path(settings.MEDIA_ROOT) / "barcodes" / f"{product.id}.png").resolve()
+        assert path.exists()
+        assert path.read_bytes().startswith(b"\x89PNG")
+
+    def test_barcode_image_url_works_for_cashier(self, cashier_client, product):
+        response = cashier_client.get("/products")
         assert response.status_code == 200
-        assert response["Content-Type"] == "image/png"
-        assert response.content.startswith(b"\x89PNG")
-        assert response["Cache-Control"] == "public, max-age=31536000, immutable"
+        item = next(p for p in response.json() if p["id"] == str(product.id))
+        assert item["barcode_image_url"].startswith("http://testserver/media/barcodes/")
 
-    def test_barcode_image_works_for_cashier(self, cashier_client, product):
-        response = cashier_client.get(f"/products/{product.id}/barcode")
-        assert response.status_code == 200
-
-    def test_barcode_image_404_for_other_business(self, owner_client, business):
-        from accounts.models import Business
-
-        other = Business.objects.create(name="Other", owner=business.owner)
+    def test_changing_barcode_regenerates_same_file(self, business):
         from products.models import Product
 
-        other_product = Product.objects.create(
-            business=other, name="Other item", barcode="1234", unit_price=10
-        )
-        response = owner_client.get(f"/products/{other_product.id}/barcode")
-        assert response.status_code == 404
+        p = Product.objects.create(business=business, name="R", barcode="111", unit_price=10)
+        assert p.barcode_image.name == f"barcodes/{p.id}.png"
 
-    def test_barcode_image_404_when_no_barcode(self, owner_client, business):
+        first = p.barcode_image.read()
+        p.barcode = "222"
+        p.save(update_fields=["barcode"])
+
+        p.refresh_from_db()
+        assert p.barcode_image.name == f"barcodes/{p.id}.png"  # same path — no orphan
+        assert p.barcode_image.read() != first
+
+    def test_clearing_barcode_removes_image(self, business):
+        from django.conf import settings
+
         from products.models import Product
 
-        blank = Product.objects.create(
-            business=business, name="No bar", barcode=None, unit_price=10
-        )
-        response = owner_client.get(f"/products/{blank.id}/barcode")
-        assert response.status_code == 404
+        p = Product.objects.create(business=business, name="R", barcode="111", unit_price=10)
+        path = (Path(settings.MEDIA_ROOT) / p.barcode_image.name).resolve()
+        assert path.exists()
+
+        p.barcode = None
+        p.save(update_fields=["barcode"])
+        p.refresh_from_db()
+        assert p.barcode_image.name in ("", None)  # ImageField → empty is None
+        assert not path.exists()
+
+    def test_no_image_when_barcode_missing(self, business):
+        from products.models import Product
+
+        p = Product.objects.create(business=business, name="No bar", barcode=None, unit_price=10)
+        assert p.barcode_image.name in ("", None)  # empty ImageField → None

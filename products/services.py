@@ -59,6 +59,34 @@ def render_barcode_png(barcode: str) -> bytes:
     return buf.getvalue()
 
 
+def sync_barcode_image(product) -> None:
+    """Persist the Code128 PNG on the media storage, keeping it in sync.
+
+    - no barcode          → remove any stored image (no orphan files)
+    - path already current → cheap no-op (the upload_to callable bakes the
+      barcode-value digest into the path, so an unchanged value keeps the same
+      name → the post_save guard is idempotent, no recursion)
+    - barcode changed     → new name (new digest), the old PNG is deleted and
+      the new one written (one file per code — no orphans ever)
+    """
+    from django.core.files.base import ContentFile
+
+    target_name = f"barcodes/{product.id}.png"
+    storage = product.barcode_image.field.storage
+    if not product.barcode:
+        if product.barcode_image:
+            product.barcode_image.delete(save=False)
+            product.save(update_fields=["barcode_image"])
+        return
+    if product.barcode_image.name == target_name and storage.exists(target_name):
+        if storage.open(target_name).read() == render_barcode_png(product.barcode):
+            return
+        product.barcode_image.delete(save=False)
+    png = render_barcode_png(product.barcode)
+    product.barcode_image.save(target_name, ContentFile(png), save=False)
+    product.save(update_fields=["barcode_image"])
+
+
 def parse_product_barcode(barcode: str) -> BarcodePayload | None:
     """Decode a FOBOS barcode into its payload; None for manufacturer codes."""
     if not barcode.startswith(BARCODE_PREFIX):

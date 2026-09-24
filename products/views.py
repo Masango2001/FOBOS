@@ -1,9 +1,6 @@
 """Product + inventory read endpoints (Tech Spec §4, §8 step 3/6)."""
 
-import uuid
-
 from django.db import IntegrityError
-from django.http import HttpResponse
 from rest_framework import generics, status
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
@@ -14,7 +11,7 @@ from accounts.permissions import HasBusiness, IsOwner
 
 from .models import Product
 from .serializers import ProductSerializer
-from .services import build_product_barcode, parse_product_barcode, render_barcode_png
+from .services import build_product_barcode, parse_product_barcode
 
 
 class ProductListCreateView(generics.ListCreateAPIView):
@@ -74,40 +71,6 @@ class ProductScanView(APIView):
         return Response(ProductSerializer(product).data)
 
 
-class ProductBarcodeView(APIView):
-    """GET /products/<uuid:pk>/barcode → PNG image of the product's Code128 barcode.
-
-    The barcode value (FOBOS-generated or manufacturer) is embedded as an image
-    so the front can render it for printing / on-screen without client-side libs.
-    """
-
-    permission_classes = [IsAuthenticated, HasBusiness]
-
-    def get(self, request, pk: uuid.UUID):
-        product = Product.objects.filter(business=request.user.business, pk=pk).first()
-        if product is None:
-            return Response(
-                {"detail": "Product not found."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-        if not product.barcode:
-            return Response(
-                {"detail": "This product has no barcode."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-        if any(ord(char) > 127 for char in product.barcode):
-            return Response(
-                {
-                    "code": "barcode_not_renderable",
-                    "detail": "Barcode contains non-ASCII characters.",
-                },
-                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            )
-        response = HttpResponse(render_barcode_png(product.barcode), content_type="image/png")
-        response["Cache-Control"] = "public, max-age=31536000, immutable"
-        return response
-
-
 class InventoryListView(APIView):
     """GET /inventory — products with stock, value, low-stock flags (owner only)."""
 
@@ -120,6 +83,7 @@ class InventoryListView(APIView):
                 "id": p.id,
                 "name": p.name,
                 "barcode": p.barcode,
+                "barcode_image_url": (p.barcode_image.url if p.barcode_image else None),
                 "unit_cost": p.unit_cost,
                 "unit_price": p.unit_price,
                 "stock_qty": p.stock_qty,

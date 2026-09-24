@@ -146,4 +146,10 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 
+# Local file storage (Docker named volume `media`, mounted at /app/media).
+# Product barcode images are persisted here — swap MEDIA_ROOT/DEFAULT_FILE_STORAGE
+# for an object store (S3/MinIO) when the infra is provisioned.
+MEDIA_URL = "media/"
+MEDIA_ROOT = BASE_DIR / "media"
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
