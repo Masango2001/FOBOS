@@ -1,0 +1,7 @@
+Django==5.2.*
+djangorestframework~=3.17.0
+djangorestframework-simplejwt~=5.5.0
+psycopg[binary]~=3.2.0
+python-dotenv~=1.0
+python-barcode~=0.15.0
+Pillow~=12.3.0
