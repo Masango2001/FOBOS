@@ -1,0 +1,77 @@
+"""PaymentRailAdapter interface + registry (Tech Spec §5, PRD §11)."""
+
+from __future__ import annotations
+
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from decimal import Decimal
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from accounts.models import Business
+
+
+class AdapterNotInstalled(Exception):
+    """No adapter registered for the rail a settlement preference requires."""
+
+    def __init__(self, rail: str) -> None:
+        super().__init__(f"No PaymentRailAdapter registered for rail '{rail}'")
+        self.rail = rail
+
+
+@dataclass(frozen=True)
+class AdapterInvoice:
+    """Result of create_invoice — shaped like the Tech Spec §5 contract."""
+
+    order_id: str
+    payment_request: str
+    amount_sats: int | None = None
+    amount_bif: Decimal | None = None
+
+
+@dataclass(frozen=True)
+class AdapterStatus:
+    status: str
+    confirmed_at: object | None = None
+    amount_bif: Decimal | None = None
+    amount_sats: int | None = None
+
+
+class PaymentRailAdapter(ABC):
+    """Common interface so the event handler never branches on rail type (§5)."""
+
+    rail: str
+
+    @abstractmethod
+    def create_invoice(
+        self,
+        *,
+        amount: Decimal,
+        currency: str,
+        business: Business,
+        order_id: str,
+    ) -> AdapterInvoice: ...
+
+    @abstractmethod
+    def get_status(self, order_id: str) -> AdapterStatus: ...
+
+
+_REGISTRY: dict[str, PaymentRailAdapter] = {}
+
+
+def register_adapter(adapter: PaymentRailAdapter) -> None:
+    _REGISTRY[adapter.rail] = adapter
+
+
+def get_adapter(rail: str) -> PaymentRailAdapter:
+    adapter = _REGISTRY.get(rail)
+    if adapter is None:
+        raise AdapterNotInstalled(rail)
+    return adapter
+
+
+def rails_by_settlement_preference(preference: str) -> str:
+    """Map Business.settlement_preference → rail (Tech Spec §3 step 1)."""
+    if preference == "bif_lumicash":
+        return "bitlibera_offramp"
+    return "blink_direct"

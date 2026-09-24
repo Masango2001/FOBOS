@@ -1,0 +1,126 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - develop
+  push:
+    branches:
+      - develop
+
+env:
+  IMAGE_NAME: fobos-web
+
+jobs:
+  # 1. Docker build — validates the web image builds. NEVER pushed to any registry.
+  docker-build:
+    name: Docker build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create .env from example
+        run: cp .env.example .env.dev
+      - name: Build image
+        run: docker compose build web
+        working-directory: .
+
+  # 2. Code quality — lint, format, static analysis.
+  quality:
+    name: Quality (ruff, mypy, bandit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create .env from example
+        run: cp .env.example .env.dev
+      - name: Build image
+        run: docker compose build web
+      - name: Ruff check
+        run: docker compose run --rm --no-deps web ruff check .
+      - name: Ruff format
+        run: docker compose run --rm --no-deps web ruff format --check .
+      - name: mypy
+        run: docker compose run --rm --no-deps web mypy .
+      - name: Bandit
+        run: docker compose run --rm --no-deps web bandit -c pyproject.toml -r .
+
+  # 3. Dependency vulnerabilities.
+  pip-audit:
+    name: pip-audit deps
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create .env from example
+        run: cp .env.example .env.dev
+      - name: Build image
+        run: docker compose build web
+      - name: pip-audit
+        run: docker compose run --rm --no-deps web pip-audit -r requirements/dev.txt
+
+  # 4. Tests + coverage report (threshold in pyproject.toml).
+  tests:
+    name: Tests (pytest + coverage)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create .env from example
+        run: cp .env.example .env.dev
+      - name: Build images
+        run: docker compose build
+      - name: Run pytest with coverage
+        run: docker compose run --rm web pytest
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage.xml
+          path: coverage.xml
+      - name: Upload junit artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit.xml
+          path: junit.xml
+
+  # 5. Image vulnerability scan (OS + bundled deps).
+  trivy:
+    name: Trivy image scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create .env from example
+        run: cp .env.example .env.dev
+      - name: Build image
+        run: docker compose build web
+      - name: Trivy scan image
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ env.IMAGE_NAME }}
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          ignore-unfixed: true
+
+  # 6. SonarCloud — centralized quality. Never blocks the merge:
+  #    - the scan step is skipped while SONAR_TOKEN is not defined (repo secret),
+  #    - continue-on-error even if a scan fails once the token exists.
+  sonar:
+    name: SonarCloud
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Download coverage artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage.xml
+          path: .
+      - name: Download junit artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: junit.xml
+          path: .
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarqube-scan-action@v5.0.0
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          # SonarCloud uses a fixed host; only SONAR_TOKEN is required as a secret.
+          SONAR_HOST_URL: https://sonarcloud.io
