@@ -74,8 +74,19 @@ def handle_financial_event(event: FinancialEvent) -> Sale:
                     f"Insufficient stock for product {product.name}: "
                     f"requested {quantity}, available {product.stock_qty}"
                 )
-            product.stock_qty -= quantity
-            product.save(update_fields=["stock_qty"])
+
+            # LOT 1 rule 3: stock never changes without an associated movement,
+            # in the same transaction as the decrement + sale line + ledger.
+            from products.movements import apply_stock_movement
+            from products.models import StockMovement
+
+            apply_stock_movement(
+                product=product,
+                movement_type=StockMovement.MovementType.SALE,
+                qty_delta=-quantity,
+                reason="vente",
+                reference=payment.order_id,
+            )
 
             SaleLine.objects.create(
                 sale=sale,
