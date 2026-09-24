@@ -15,8 +15,12 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework import serializers
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema, inline_serializer
 
 from accounts.permissions import HasBusiness
+from config.openapi import ApiErrorSerializer
 
 from .adapters import AdapterNotInstalled, OnrampOtpError, get_adapter, get_onramp_adapter
 from .models import Payment
@@ -35,6 +39,9 @@ ONRAMP_RAIL = "bitlibera_onramp"
 class PaymentStatusView(APIView):
     permission_classes = [IsAuthenticated, HasBusiness]
 
+    @extend_schema(
+        responses={200: PaymentSerializer, 404: ApiErrorSerializer, 503: ApiErrorSerializer}
+    )
     def get(self, request, pk: uuid.UUID):
         payment = Payment.objects.filter(business=request.user.business, pk=pk).first()
         if payment is None:
@@ -75,6 +82,20 @@ class OnrampRequestOtpView(APIView):
 
     permission_classes = [IsAuthenticated, HasBusiness]
 
+    @extend_schema(
+        request=OnrampRequestSerializer,
+        responses={
+            200: inline_serializer(
+                name="OnrampRequestOtpResponse",
+                fields={
+                    "status": serializers.CharField(),
+                    "demo_otp": serializers.CharField(required=False, allow_null=True),
+                },
+            ),
+            400: OpenApiTypes.OBJECT,
+            503: ApiErrorSerializer,
+        },
+    )
     def post(self, request):
         serializer = OnrampRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -100,6 +121,15 @@ class OnrampConfirmView(APIView):
 
     permission_classes = [IsAuthenticated, HasBusiness]
 
+    @extend_schema(
+        request=OnrampConfirmSerializer,
+        responses={
+            200: PaymentSerializer,
+            400: OpenApiTypes.OBJECT,
+            404: ApiErrorSerializer,
+            503: ApiErrorSerializer,
+        },
+    )
     def post(self, request):
         serializer = OnrampConfirmSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)

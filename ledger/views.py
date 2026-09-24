@@ -8,6 +8,8 @@ from django.db.models import Sum
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework import serializers
+from drf_spectacular.utils import extend_schema, inline_serializer
 
 from accounts.permissions import IsOwner
 from automation.models import AutomationExecution
@@ -30,6 +32,7 @@ class LedgerListView(APIView):
 
     permission_classes = [IsAuthenticated, IsOwner]
 
+    @extend_schema(responses={200: LedgerEntrySerializer(many=True)})
     def get(self, request):
         entries = LedgerEntry.objects.filter(business=request.user.business)
         serializer = LedgerEntrySerializer(entries, many=True)
@@ -41,6 +44,45 @@ class DashboardView(APIView):
 
     permission_classes = [IsAuthenticated, IsOwner]
 
+    @extend_schema(
+        responses={
+            200: inline_serializer(
+                name="DashboardResponse",
+                fields={
+                    "date": serializers.DateField(),
+                    "today_sales_count": serializers.IntegerField(),
+                    "today_sales_amount": serializers.DecimalField(max_digits=20, decimal_places=2),
+                    "revenue": serializers.CharField(),
+                    "cogs": serializers.CharField(),
+                    "gross_profit": serializers.CharField(),
+                    "gross_margin": serializers.CharField(),
+                    "net_cashflow": serializers.CharField(),
+                    "stock_warnings": inline_serializer(
+                        name="DashboardStockWarning",
+                        many=True,
+                        fields={
+                            "id": serializers.UUIDField(),
+                            "name": serializers.CharField(),
+                            "barcode": serializers.CharField(allow_null=True),
+                            "stock_qty": serializers.IntegerField(),
+                            "stock_threshold": serializers.IntegerField(),
+                        },
+                    ),
+                    "alerts": inline_serializer(
+                        name="DashboardAlert",
+                        many=True,
+                        fields={
+                            "id": serializers.UUIDField(),
+                            "rule_id": serializers.UUIDField(),
+                            "executed_at": serializers.DateTimeField(),
+                            "action": serializers.CharField(allow_null=True),
+                            "products": serializers.JSONField(allow_null=True),
+                        },
+                    ),
+                },
+            )
+        }
+    )
     def get(self, request):
         business = request.user.business
         today = timezone.localdate()

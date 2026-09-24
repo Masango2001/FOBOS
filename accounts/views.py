@@ -7,6 +7,9 @@ from rest_framework import generics, permissions, status
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import OpenApiResponse, extend_schema, inline_serializer
+from rest_framework import serializers as drf_serializers
 
 from .models import User
 from .permissions import IsOwner
@@ -27,6 +30,22 @@ class SignupView(generics.CreateAPIView):
 class VerifyEmailView(APIView):
     permission_classes = [permissions.AllowAny]
 
+    @extend_schema(
+        responses={
+            (200, "text/html"): OpenApiResponse(
+                response=OpenApiTypes.STR,
+                description="HTML confirmation page after successful or repeated verification.",
+            ),
+            (400, "text/html"): OpenApiResponse(
+                response=OpenApiTypes.STR,
+                description="HTML error page for an invalid or expired verification link.",
+            ),
+            (404, "text/html"): OpenApiResponse(
+                response=OpenApiTypes.STR,
+                description="HTML not-found page if the account for the valid token no longer exists.",
+            ),
+        }
+    )
     def get(self, request: HttpRequest, token: str) -> HttpResponse:
         user_id = verify_verification_token(token)
         if user_id is None:
@@ -89,6 +108,16 @@ class ResendVerificationView(APIView):
 
     permission_classes = [permissions.AllowAny]
 
+    @extend_schema(
+        request=ResendVerificationSerializer,
+        responses={
+            200: inline_serializer(
+                name="ResendVerificationResponse",
+                fields={"detail": drf_serializers.CharField()},
+            ),
+            400: OpenApiTypes.OBJECT,
+        },
+    )
     def post(self, request: Request) -> Response:
         serializer = ResendVerificationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
