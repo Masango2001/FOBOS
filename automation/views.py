@@ -1,6 +1,7 @@
 from rest_framework import generics, permissions
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from drf_spectacular.utils import extend_schema
 
 from accounts.permissions import IsOwner
 
@@ -29,6 +30,7 @@ class AutomationExecutionListView(APIView):
 
     permission_classes = [permissions.IsAuthenticated, IsOwner]
 
+    @extend_schema(responses={200: AutomationExecutionSerializer(many=True)})
     def get(self, request):
         ensure_default_rule(request.user.business)
         executions = AutomationExecution.objects.filter(rule__business=request.user.business)

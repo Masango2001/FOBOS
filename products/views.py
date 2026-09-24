@@ -1,13 +1,16 @@
 """Product + inventory read endpoints (Tech Spec §4, §8 step 3/6)."""
 
 from django.db import IntegrityError
-from rest_framework import generics, status
+from rest_framework import generics, serializers, status
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
 
 from accounts.permissions import HasBusiness, IsOwner
+from config.openapi import ApiErrorSerializer
 
 from .models import Product
 from .serializers import ProductSerializer
@@ -58,6 +61,10 @@ class ProductScanView(APIView):
 
     permission_classes = [IsAuthenticated, HasBusiness]
 
+    @extend_schema(
+        parameters=[OpenApiParameter("barcode", OpenApiTypes.STR, OpenApiParameter.PATH)],
+        responses={200: ProductSerializer, 404: ApiErrorSerializer},
+    )
     def get(self, request, barcode: str):
         business = request.user.business
         product = None
@@ -79,6 +86,27 @@ class InventoryListView(APIView):
 
     permission_classes = [IsAuthenticated, IsOwner]
 
+    @extend_schema(
+        responses={
+            200: inline_serializer(
+                name="InventoryItem",
+                many=True,
+                fields={
+                    "id": serializers.UUIDField(),
+                    "name": serializers.CharField(),
+                    "barcode": serializers.CharField(allow_null=True),
+                    "barcode_image_url": serializers.CharField(allow_null=True),
+                    "unit_cost": serializers.DecimalField(max_digits=20, decimal_places=2),
+                    "unit_price": serializers.DecimalField(max_digits=20, decimal_places=2),
+                    "stock_qty": serializers.IntegerField(),
+                    "stock_threshold": serializers.IntegerField(),
+                    "inventory_value": serializers.DecimalField(max_digits=20, decimal_places=2),
+                    "low_stock": serializers.BooleanField(),
+                    "created_at": serializers.DateTimeField(),
+                },
+            )
+        }
+    )
     def get(self, request):
         products = Product.objects.filter(business=request.user.business)
         data = [
