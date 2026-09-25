@@ -7,7 +7,8 @@ confirmation goes through `confirm_payment` (idempotent on order_id).
 
 The on-ramp endpoints proxy a Lumicash-OTP adapter (`OnrampAdapter`): request-otp
 asks the provider to SMS an OTP; confirm validates it and confirms the Payment.
-Canonical statuses returned to clients: pending | confirmed | failed | expired.
+Canonical statuses returned to clients: pending | paid | failed | expired | cancelled
+(doc §5.4 / §24).
 """
 
 import uuid
@@ -139,7 +140,7 @@ class OnrampConfirmView(APIView):
         ).first()
         if payment is None:
             return Response({"detail": "Payment not found."}, status=status.HTTP_404_NOT_FOUND)
-        if payment.status == Payment.Status.CONFIRMED:
+        if payment.status == Payment.Status.PAID:
             # Idempotent retry (PRD §32): the OTP was already consumed, the order is done.
             return Response(PaymentSerializer(payment).data, status=status.HTTP_200_OK)
         try:

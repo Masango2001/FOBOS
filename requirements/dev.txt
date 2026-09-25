@@ -5,6 +5,7 @@ ruff~=0.11.0
 mypy~=1.17.0
 django-stubs~=6.0.0
 djangorestframework-stubs~=3.17.0
+types-requests~=2.33.0
 
 # security scanners
 bandit[toml]~=1.8.0

@@ -101,7 +101,7 @@ class TestConfirmPayment:
 
         assert event.status == FinancialEvent.Status.CONFIRMED
         payment = Payment.objects.get(order_id=data["order_id"])
-        assert payment.status == Payment.Status.CONFIRMED
+        assert payment.status == Payment.Status.PAID
         assert payment.financial_event_id == event.id
 
         sale = Sale.objects.get(financial_event=event)
