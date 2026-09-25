@@ -1,0 +1,1591 @@
+openapi: 3.0.3
+info:
+  title: FOBOS Commerce & Ledger
+  version: 0.1.0
+  description: Backend Commerce & Ledger de la Financial Operations Platform — produits,
+    stock, ledger, automations et paiements (MVP).
+paths:
+  /auth/cashiers:
+    get:
+      operationId: auth_cashiers_list
+      description: |-
+        GET/POST /auth/cashiers — owner-only: list or create cashiers of their business.
+
+        An owner never sees other businesses' cashiers nor their own account here
+        (the queryset is scoped to role=cashier + the owner's business).
+      tags:
+      - auth
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Cashier'
+          description: ''
+    post:
+      operationId: auth_cashiers_create
+      description: |-
+        GET/POST /auth/cashiers — owner-only: list or create cashiers of their business.
+
+        An owner never sees other businesses' cashiers nor their own account here
+        (the queryset is scoped to role=cashier + the owner's business).
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CashierCreate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CashierCreate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CashierCreate'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CashierCreate'
+          description: ''
+  /auth/cashiers/{id}:
+    get:
+      operationId: auth_cashiers_retrieve
+      description: |-
+        GET/PATCH/PUT/DELETE /auth/cashiers/<pk> — owner-only.
+
+        A cashier of another business or the owner's own account resolves to 404
+        (queryset scoped to role=cashier + the owner's business).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - auth
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cashier'
+          description: ''
+    put:
+      operationId: auth_cashiers_update
+      description: |-
+        GET/PATCH/PUT/DELETE /auth/cashiers/<pk> — owner-only.
+
+        A cashier of another business or the owner's own account resolves to 404
+        (queryset scoped to role=cashier + the owner's business).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Cashier'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Cashier'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Cashier'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cashier'
+          description: ''
+    patch:
+      operationId: auth_cashiers_partial_update
+      description: |-
+        GET/PATCH/PUT/DELETE /auth/cashiers/<pk> — owner-only.
+
+        A cashier of another business or the owner's own account resolves to 404
+        (queryset scoped to role=cashier + the owner's business).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedCashier'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedCashier'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedCashier'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cashier'
+          description: ''
+    delete:
+      operationId: auth_cashiers_destroy
+      description: |-
+        GET/PATCH/PUT/DELETE /auth/cashiers/<pk> — owner-only.
+
+        A cashier of another business or the owner's own account resolves to 404
+        (queryset scoped to role=cashier + the owner's business).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - auth
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /auth/login:
+    post:
+      operationId: auth_login_create
+      description: |-
+        Takes a set of user credentials and returns an access and refresh JSON web
+        token pair to prove the authentication of those credentials.
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FobosTokenObtainPair'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/FobosTokenObtainPair'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/FobosTokenObtainPair'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FobosTokenObtainPair'
+          description: ''
+  /auth/resend-verification:
+    post:
+      operationId: auth_resend_verification_create
+      description: Send a fresh signed link. Generic 200 response — never leaks whether
+        the email exists.
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResendVerification'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ResendVerification'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ResendVerification'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResendVerificationResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /auth/signup:
+    post:
+      operationId: auth_signup_create
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Signup'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Signup'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Signup'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Signup'
+          description: ''
+  /auth/verify-email/{token}/:
+    get:
+      operationId: auth_verify_email_retrieve
+      parameters:
+      - in: path
+        name: token
+        schema:
+          type: string
+        required: true
+      tags:
+      - auth
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            text/html:
+              schema:
+                type: string
+          description: HTML confirmation page after successful or repeated verification.
+        '400':
+          content:
+            text/html:
+              schema:
+                type: string
+          description: HTML error page for an invalid or expired verification link.
+        '404':
+          content:
+            text/html:
+              schema:
+                type: string
+          description: HTML not-found page if the account for the valid token no longer
+            exists.
+  /automations:
+    get:
+      operationId: automations_list
+      description: GET/POST /automations (Tech Spec §4, owner only).
+      tags:
+      - automations
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AutomationRule'
+          description: ''
+    post:
+      operationId: automations_create
+      description: GET/POST /automations (Tech Spec §4, owner only).
+      tags:
+      - automations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AutomationRule'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AutomationRule'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AutomationRule'
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AutomationRule'
+          description: ''
+  /automations/executions:
+    get:
+      operationId: automations_executions_list
+      description: GET /automations/executions (Tech Spec §4, owner only).
+      tags:
+      - automations
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AutomationExecution'
+          description: ''
+  /cart/checkout:
+    post:
+      operationId: cart_checkout_create
+      description: POST /cart/checkout → { payment_request, order_id, rail } (§3 step
+        1).
+      tags:
+      - cart
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Checkout'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Checkout'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Checkout'
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckoutResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /dashboard:
+    get:
+      operationId: dashboard_retrieve
+      description: GET /dashboard — today's sales, revenue, profit, cashflow, stock
+        warnings, alerts.
+      tags:
+      - dashboard
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardResponse'
+          description: ''
+  /inventory:
+    get:
+      operationId: inventory_list
+      description: GET /inventory — products with stock, value, low-stock flags (owner
+        only).
+      tags:
+      - inventory
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/InventoryItem'
+          description: ''
+  /inventory/adjustments:
+    post:
+      operationId: inventory_adjustments_create
+      description: POST /inventory/adjustments — owner applies a manual stock correction.
+      tags:
+      - inventory
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StockAdjustment'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/StockAdjustment'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/StockAdjustment'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockMutationResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /inventory/movements:
+    get:
+      operationId: inventory_movements_retrieve
+      description: |-
+        GET /inventory/movements — cursor-paginated append-only stock ledger.
+
+        Read access for any business user (owner or cashier); writes are owner-only.
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Opaque cursor returned as next_cursor by the previous page.
+      - in: query
+        name: limit
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+          default: 50
+        description: Page size from 1 to 200; defaults to 50.
+      - in: query
+        name: product_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: type
+        schema:
+          type: string
+          enum:
+          - adjustment
+          - restock
+          - return
+          - sale
+      tags:
+      - inventory
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockMovementPage'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /inventory/restock:
+    post:
+      operationId: inventory_restock_create
+      description: POST /inventory/restock — owner restocks a product (positive qty
+        only).
+      tags:
+      - inventory
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StockRestock'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/StockRestock'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/StockRestock'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockMutationResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /ledger:
+    get:
+      operationId: ledger_list
+      description: GET /ledger — the traceable ledger entries for the business.
+      tags:
+      - ledger
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LedgerEntry'
+          description: ''
+  /payments/{id}/status:
+    get:
+      operationId: payments_status_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - payments
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /payments/onramp/confirm:
+    post:
+      operationId: payments_onramp_confirm_create
+      description: POST /payments/onramp/confirm → validates the OTP and confirms
+        the order.
+      tags:
+      - payments
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OnrampConfirm'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OnrampConfirm'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OnrampConfirm'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /payments/onramp/request-otp:
+    post:
+      operationId: payments_onramp_request_otp_create
+      description: POST /payments/onramp/request-otp → customer receives an SMS OTP.
+      tags:
+      - payments
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OnrampRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OnrampRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OnrampRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnrampRequestOtpResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /products:
+    get:
+      operationId: products_list
+      description: |-
+        GET/POST /products — POST is owner-only (inventory is owner mode, §17).
+
+        A product created without a manufacturer barcode gets a FOBOS-generated one
+        embedding name | unit_price | product id (products/services.py).
+      tags:
+      - products
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Product'
+          description: ''
+    post:
+      operationId: products_create
+      description: |-
+        GET/POST /products — POST is owner-only (inventory is owner mode, §17).
+
+        A product created without a manufacturer barcode gets a FOBOS-generated one
+        embedding name | unit_price | product id (products/services.py).
+      tags:
+      - products
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Product'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Product'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Product'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+          description: ''
+  /products/scan/{barcode}:
+    get:
+      operationId: products_scan_retrieve
+      description: |-
+        GET /products/scan/:barcode — cashier mode needs this to build a cart.
+
+        Resolves FOBOS barcodes by their embedded product id (authoritative), then
+        falls back to an exact barcode match for manufacturer codes.
+      parameters:
+      - in: path
+        name: barcode
+        schema:
+          type: string
+        required: true
+      tags:
+      - products
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+components:
+  schemas:
+    ApiError:
+      type: object
+      description: An explicit API error returned by one of the views.
+      properties:
+        code:
+          type: string
+        detail:
+          type: string
+      required:
+      - detail
+    AutomationExecution:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        rule:
+          type: string
+          format: uuid
+        financial_event:
+          type: string
+          format: uuid
+          nullable: true
+        result: {}
+        executed_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - executed_at
+      - id
+      - rule
+    AutomationRule:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        trigger:
+          type: string
+          maxLength: 64
+        condition: {}
+        action:
+          type: string
+          maxLength: 64
+        active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+    Cashier:
+      type: object
+      description: |-
+        Read + update (PUT/PATCH) of an owner's cashier — password optional on update.
+
+        `role`, `business` and `email_verified` are read-only: an owner cannot promote a
+        cashier, move them to another business, or skip email verification. Changing the
+        email resets `email_verified` and sends a fresh verification link.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          maxLength: 150
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        phone:
+          type: string
+          maxLength: 30
+        role:
+          allOf:
+          - $ref: '#/components/schemas/RoleEnum'
+          readOnly: true
+        business:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        email_verified:
+          type: boolean
+          readOnly: true
+        password:
+          type: string
+          writeOnly: true
+          minLength: 8
+      required:
+      - business
+      - email
+      - email_verified
+      - id
+      - name
+      - role
+    CashierCreate:
+      type: object
+      description: Owner creates a cashier for their business — email verified before
+        first login.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          maxLength: 150
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        phone:
+          type: string
+          maxLength: 30
+        role:
+          allOf:
+          - $ref: '#/components/schemas/RoleEnum'
+          readOnly: true
+        business:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        email_verified:
+          type: boolean
+          readOnly: true
+        password:
+          type: string
+          writeOnly: true
+          minLength: 8
+      required:
+      - business
+      - email
+      - email_verified
+      - id
+      - name
+      - password
+      - role
+    Checkout:
+      type: object
+      description: POST /cart/checkout payload — lines (product cart) or a custom
+        amount (§4).
+      properties:
+        lines:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,18}(?:\.\d{0,2})?$
+        currency:
+          allOf:
+          - $ref: '#/components/schemas/CheckoutCurrencyEnum'
+          default: BIF
+    CheckoutCurrencyEnum:
+      enum:
+      - BIF
+      - USD
+      - SAT
+      type: string
+      description: |-
+        * `BIF` - BIF
+        * `USD` - USD
+        * `SAT` - SAT
+    CheckoutResponse:
+      type: object
+      properties:
+        order_id:
+          type: string
+        payment_request:
+          type: string
+        amount_bif:
+          type: integer
+          nullable: true
+        amount_sats:
+          type: integer
+          nullable: true
+        status:
+          type: string
+        receipt:
+          nullable: true
+      required:
+      - amount_bif
+      - amount_sats
+      - order_id
+      - payment_request
+      - receipt
+      - status
+    DashboardAlert:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        rule_id:
+          type: string
+          format: uuid
+        executed_at:
+          type: string
+          format: date-time
+        action:
+          type: string
+          nullable: true
+        products:
+          nullable: true
+      required:
+      - action
+      - executed_at
+      - id
+      - products
+      - rule_id
+    DashboardResponse:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        today_sales_count:
+          type: integer
+        today_sales_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,18}(?:\.\d{0,2})?$
+        revenue:
+          type: string
+        cogs:
+          type: string
+        gross_profit:
+          type: string
+        gross_margin:
+          type: string
+        net_cashflow:
+          type: string
+        stock_warnings:
+          type: array
+          items:
+            $ref: '#/components/schemas/DashboardStockWarning'
+        alerts:
+          type: array
+          items:
+            $ref: '#/components/schemas/DashboardAlert'
+      required:
+      - alerts
+      - cogs
+      - date
+      - gross_margin
+      - gross_profit
+      - net_cashflow
+      - revenue
+      - stock_warnings
+      - today_sales_amount
+      - today_sales_count
+    DashboardStockWarning:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        barcode:
+          type: string
+          nullable: true
+        stock_qty:
+          type: integer
+        stock_threshold:
+          type: integer
+      required:
+      - barcode
+      - id
+      - name
+      - stock_qty
+      - stock_threshold
+    FobosTokenObtainPair:
+      type: object
+      description: JWT pair that refuses unverified emails and embeds the role claim
+        (§4).
+      properties:
+        email:
+          type: string
+          writeOnly: true
+        password:
+          type: string
+          writeOnly: true
+      required:
+      - email
+      - password
+    InventoryItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        barcode:
+          type: string
+          nullable: true
+        barcode_image_url:
+          type: string
+          nullable: true
+        unit_cost:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,18}(?:\.\d{0,2})?$
+        unit_price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,18}(?:\.\d{0,2})?$
+        stock_qty:
+          type: integer
+        stock_threshold:
+          type: integer
+        inventory_value:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,18}(?:\.\d{0,2})?$
+        low_stock:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+      required:
+      - barcode
+      - barcode_image_url
+      - created_at
+      - id
+      - inventory_value
+      - low_stock
+      - name
+      - stock_qty
+      - stock_threshold
+      - unit_cost
+      - unit_price
+    LedgerEntry:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        type:
+          $ref: '#/components/schemas/LedgerEntryTypeEnum'
+        account:
+          type: string
+          maxLength: 64
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,18}(?:\.\d{0,2})?$
+        currency:
+          $ref: '#/components/schemas/LedgerEntryCurrencyEnum'
+        financial_event_id:
+          type: string
+          format: uuid
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - account
+      - amount
+      - created_at
+      - financial_event_id
+      - id
+      - type
+    LedgerEntryCurrencyEnum:
+      enum:
+      - BIF
+      - USD
+      - SAT
+      type: string
+      description: |-
+        * `BIF` - Burundian Franc
+        * `USD` - US Dollar
+        * `SAT` - Sats
+    LedgerEntryTypeEnum:
+      enum:
+      - credit
+      - debit
+      type: string
+      description: |-
+        * `credit` - Credit
+        * `debit` - Debit
+    OnrampConfirm:
+      type: object
+      description: POST /payments/onramp/confirm — executes the OTP against an order
+        (Tech Spec §4).
+      properties:
+        customer_phone:
+          type: string
+          maxLength: 30
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,18}(?:\.\d{0,2})?$
+        otp:
+          type: string
+          maxLength: 10
+        order_id:
+          type: string
+          maxLength: 64
+      required:
+      - amount
+      - customer_phone
+      - order_id
+      - otp
+    OnrampRequest:
+      type: object
+      description: POST /payments/onramp/request-otp — Lumicash OTP (Tech Spec §4).
+      properties:
+        customer_phone:
+          type: string
+          maxLength: 30
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,18}(?:\.\d{0,2})?$
+      required:
+      - amount
+      - customer_phone
+    OnrampRequestOtpResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        demo_otp:
+          type: string
+          nullable: true
+      required:
+      - status
+    PatchedCashier:
+      type: object
+      description: |-
+        Read + update (PUT/PATCH) of an owner's cashier — password optional on update.
+
+        `role`, `business` and `email_verified` are read-only: an owner cannot promote a
+        cashier, move them to another business, or skip email verification. Changing the
+        email resets `email_verified` and sends a fresh verification link.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          maxLength: 150
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        phone:
+          type: string
+          maxLength: 30
+        role:
+          allOf:
+          - $ref: '#/components/schemas/RoleEnum'
+          readOnly: true
+        business:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        email_verified:
+          type: boolean
+          readOnly: true
+        password:
+          type: string
+          writeOnly: true
+          minLength: 8
+    Payment:
+      type: object
+      properties:
+        order_id:
+          type: string
+          readOnly: true
+          description: BitLibera reference — idempotency key.
+        payment_request:
+          type: string
+          readOnly: true
+        amount_bif:
+          type: integer
+          readOnly: true
+          nullable: true
+        amount_sats:
+          type: integer
+          readOnly: true
+          nullable: true
+        lumicash_phone:
+          type: string
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/StatusEnum'
+          readOnly: true
+        confirmed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        receipt:
+          allOf:
+          - $ref: '#/components/schemas/ReceiptResponse'
+          readOnly: true
+      required:
+      - amount_bif
+      - amount_sats
+      - confirmed_at
+      - lumicash_phone
+      - order_id
+      - payment_request
+      - receipt
+      - status
+    Product:
+      type: object
+      description: barcode_image = absolute URL of the persisted Code128 PNG (local
+        media volume).
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          maxLength: 200
+        barcode:
+          type: string
+          nullable: true
+          description: 'Manufacturer barcode, or FOBOS-generated: base64(name|price|id).'
+          maxLength: 128
+        barcode_image_url:
+          type: string
+          nullable: true
+          readOnly: true
+        unit_cost:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,18}(?:\.\d{0,2})?$
+        unit_price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,18}(?:\.\d{0,2})?$
+        stock_qty:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        stock_threshold:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - barcode_image_url
+      - created_at
+      - id
+      - name
+      - unit_price
+    ReceiptResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        content: {}
+        created_at:
+          type: string
+          format: date-time
+      required:
+      - content
+      - created_at
+      - id
+    ResendVerification:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+      required:
+      - email
+    ResendVerificationResponse:
+      type: object
+      properties:
+        detail:
+          type: string
+      required:
+      - detail
+    RoleEnum:
+      enum:
+      - owner
+      - cashier
+      type: string
+      description: |-
+        * `owner` - Owner
+        * `cashier` - Cashier
+    SettlementPreferenceEnum:
+      enum:
+      - as_is
+      - bif_lumicash
+      type: string
+      description: |-
+        * `as_is` - Receive as-is
+        * `bif_lumicash` - Auto-convert to BIF
+    Signup:
+      type: object
+      description: Create a Business + owner User on signup (Tech Spec §8 step 2).
+      properties:
+        business_name:
+          type: string
+          writeOnly: true
+          maxLength: 150
+        category:
+          type: string
+          writeOnly: true
+          maxLength: 100
+        owner_name:
+          type: string
+          writeOnly: true
+          maxLength: 150
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          writeOnly: true
+          minLength: 8
+        phone:
+          type: string
+          writeOnly: true
+          maxLength: 30
+        settlement_preference:
+          allOf:
+          - $ref: '#/components/schemas/SettlementPreferenceEnum'
+          writeOnly: true
+          default: bif_lumicash
+        lumicash_number:
+          type: string
+          writeOnly: true
+          maxLength: 30
+        blink_username:
+          type: string
+          writeOnly: true
+          maxLength: 100
+      required:
+      - business_name
+      - email
+      - owner_name
+      - password
+    StatusEnum:
+      enum:
+      - pending
+      - confirmed
+      - failed
+      - expired
+      type: string
+      description: |-
+        * `pending` - pending
+        * `confirmed` - confirmed
+        * `failed` - failed
+        * `expired` - expired
+    StockAdjustment:
+      type: object
+      description: POST /inventory/adjustments body (LOT 1).
+      properties:
+        product_id:
+          type: string
+          format: uuid
+        qty_delta:
+          type: integer
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - product_id
+      - qty_delta
+      - reason
+    StockMovement:
+      type: object
+      description: Read representation of one append-only stock movement (LOT 1).
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        product_id:
+          type: string
+          format: uuid
+          readOnly: true
+        type:
+          $ref: '#/components/schemas/StockMovementTypeEnum'
+        qty_delta:
+          type: integer
+          readOnly: true
+          description: 'Signed: negative = out, positive = in.'
+        qty_after:
+          type: integer
+          readOnly: true
+          description: Resulting stock after this movement.
+        reference:
+          type: string
+          readOnly: true
+          nullable: true
+          description: order_id / financial_event_id / invoice_id.
+        reason:
+          type: string
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - product_id
+      - qty_after
+      - qty_delta
+      - reason
+      - reference
+      - type
+    StockMovementPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/StockMovement'
+        next_cursor:
+          type: string
+          nullable: true
+      required:
+      - items
+      - next_cursor
+    StockMovementTypeEnum:
+      enum:
+      - sale
+      - restock
+      - adjustment
+      - return
+      type: string
+      description: |-
+        * `sale` - sale
+        * `restock` - restock
+        * `adjustment` - adjustment
+        * `return` - return
+    StockMutationResponse:
+      type: object
+      properties:
+        movement:
+          $ref: '#/components/schemas/StockMovement'
+        product:
+          $ref: '#/components/schemas/Product'
+      required:
+      - movement
+      - product
+    StockRestock:
+      type: object
+      description: POST /inventory/restock body — restock a product (owner only).
+      properties:
+        product_id:
+          type: string
+          format: uuid
+        quantity:
+          type: integer
+          minimum: 1
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - product_id
+      - quantity
+      - reason
+  securitySchemes:
+    jwtAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

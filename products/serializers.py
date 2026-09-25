@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Product
+from .models import Product, StockMovement
 
 
 class ProductSerializer(serializers.ModelSerializer):
@@ -41,3 +41,43 @@ class ProductSerializer(serializers.ModelSerializer):
         if attrs.get("unit_cost", 0) < 0:
             raise serializers.ValidationError({"unit_cost": "Must be >= 0."})
         return attrs
+
+
+class StockMovementSerializer(serializers.ModelSerializer):
+    """Read representation of one append-only stock movement (LOT 1)."""
+
+    type = serializers.ChoiceField(choices=StockMovement.MovementType.choices)
+
+    class Meta:
+        model = StockMovement
+        fields = [
+            "id",
+            "product_id",
+            "type",
+            "qty_delta",
+            "qty_after",
+            "reference",
+            "reason",
+            "created_at",
+        ]
+        read_only_fields = fields
+
+
+class StockAdjustmentSerializer(serializers.Serializer):
+    """POST /inventory/adjustments body (LOT 1)."""
+
+    product_id = serializers.UUIDField()
+    qty_delta = serializers.IntegerField()
+    reason = serializers.CharField(
+        max_length=255, allow_blank=False, trim_whitespace=True, required=True
+    )
+
+
+class StockRestockSerializer(serializers.Serializer):
+    """POST /inventory/restock body — restock a product (owner only)."""
+
+    product_id = serializers.UUIDField()
+    quantity = serializers.IntegerField(min_value=1)
+    reason = serializers.CharField(
+        max_length=255, allow_blank=False, trim_whitespace=True, required=True
+    )

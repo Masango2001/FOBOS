@@ -68,6 +68,8 @@ jobs:
         run: sh scripts/bootstrap-ci-env.sh
       - name: Build images
         run: docker compose build
+      - name: Validate OpenAPI schema
+        run: docker compose run --rm --no-deps web python manage.py spectacular --file /tmp/openapi-schema.yaml --validate --fail-on-warn
       - name: Run pytest with coverage
         run: docker compose run --rm web pytest
       - name: Upload coverage artifact
