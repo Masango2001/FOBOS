@@ -52,7 +52,7 @@ services:
           type: web
           envVarKey: RENDER_EXTERNAL_URL
       - key: FOBOS_USE_DEMO_ADAPTERS
-        value: "false"
+        value: "true"
       - key: FOBOS_USE_LIVE_ADAPTERS
         value: "false"
       - key: EMAIL_BACKEND

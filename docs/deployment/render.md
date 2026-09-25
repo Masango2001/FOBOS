@@ -20,10 +20,10 @@ The `/health/` check verifies both Django and its database. The API hostname is
 assigned by Render; use that exact URL as the frontend API base. Render's
 forwarded HTTPS header is trusted so absolute media URLs use HTTPS on phones.
 
-The Blueprint keeps demo and live payment adapters disabled by default. Before
-enabling real transactions, review provider readiness, then set
-`FOBOS_USE_LIVE_ADAPTERS=true` and configure provider secrets in the API service.
-Provider keys belong only in the API service, never the frontend.
+The temporary staging Blueprint enables simulated payment adapters so QR and
+Lumicash OTP flows can be demonstrated without moving real money. Live adapters
+remain disabled. Before production, set `FOBOS_USE_DEMO_ADAPTERS=false`, review
+provider readiness, and configure provider secrets only in the API service.
 
 ## Frontend
 
