@@ -7,18 +7,23 @@ service already using the older `fobos-api` hostname.
 
 ## Backend
 
-The backend Blueprint creates PostgreSQL and a persistent media disk for
-generated barcode images. It runs migrations and `collectstatic` before starting
-Gunicorn. The `/health/` check verifies both Django and its database. The API
-hostname is assigned by Render; use that exact URL as the frontend API base.
-Render's forwarded HTTPS header is trusted so generated absolute media URLs use
-HTTPS on phones and other secure clients.
+The current Blueprint is a temporary free staging setup. It creates a free
+PostgreSQL database and a free web service. Free Postgres expires 30 days after
+creation, and free web services spin down after 15 minutes of inactivity. The
+start command runs migrations and `collectstatic` before Gunicorn. Free services
+cannot send SMTP on port 587, so verification messages are written to service
+logs for staging; configure a supported email provider before production. There
+is no persistent media disk, so backend-generated PNGs can disappear after a
+restart; the frontend generates its barcode labels locally. Upgrade the API,
+database, and media storage before using this as a durable production service.
+The `/health/` check verifies both Django and its database. The API hostname is
+assigned by Render; use that exact URL as the frontend API base. Render's
+forwarded HTTPS header is trusted so absolute media URLs use HTTPS on phones.
 
 The Blueprint keeps demo and live payment adapters disabled by default. Before
 enabling real transactions, review provider readiness, then set
 `FOBOS_USE_LIVE_ADAPTERS=true` and configure provider secrets in the API service.
-The Blueprint prompts for SMTP credentials so signup verification emails can be
-delivered. Provider keys belong only in the API service, never the frontend.
+Provider keys belong only in the API service, never the frontend.
 
 ## Frontend
 
