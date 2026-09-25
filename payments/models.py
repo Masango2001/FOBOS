@@ -5,7 +5,7 @@ import uuid
 from django.db import models
 
 from accounts.models import Business
-from ledger.models import CURRENCIES, FinancialEvent
+from ledger.models import Currency, FinancialEvent
 
 
 class Payment(models.Model):
@@ -55,11 +55,11 @@ class Payment(models.Model):
         blank=True,
         help_text="Frozen cart snapshots [{product_id, quantity, unit_price, unit_cost}].",
     )
-    currency = models.CharField(max_length=3, choices=CURRENCIES, default="BIF")
+    currency = models.CharField(max_length=3, choices=Currency, default=Currency.BIF)
     settlement_currency = models.CharField(
         max_length=3,
-        choices=CURRENCIES,
-        default="BIF",
+        choices=Currency,
+        default=Currency.BIF,
         help_text="Currency FOBOS expects to receive (doc §46).",
     )
     purpose = models.CharField(

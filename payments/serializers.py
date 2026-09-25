@@ -69,3 +69,15 @@ class OnrampConfirmSerializer(serializers.Serializer):
     amount = serializers.DecimalField(max_digits=20, decimal_places=2)
     otp = serializers.CharField(max_length=10)
     order_id = serializers.CharField(max_length=64)
+
+
+class BlinkWebhookSerializer(serializers.Serializer):
+    """POST /payments/webhooks/blink — rail → FOBOS order confirmation (Tech Spec §27–28).
+
+    Accepts the canonical envelope (`order_id`) and the flat form (`orderId`).
+    """
+
+    order_id = serializers.CharField(max_length=64, required=False, allow_blank=True)
+    orderId = serializers.CharField(max_length=64, required=False, allow_blank=True)
+    status = serializers.CharField(max_length=32, required=False, allow_blank=True)
+    confirmed_at = serializers.DateTimeField(required=False, allow_null=True)

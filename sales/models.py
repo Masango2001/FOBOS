@@ -7,7 +7,7 @@ import uuid as _uuid
 from django.db import models
 
 from accounts.models import Business, User
-from ledger.models import CURRENCIES, FinancialEvent
+from ledger.models import Currency, FinancialEvent
 from products.models import Product
 
 
@@ -28,7 +28,7 @@ class Sale(models.Model):
         related_name="sales",
     )
     total_amount = models.DecimalField(max_digits=20, decimal_places=2)
-    currency = models.CharField(max_length=3, choices=CURRENCIES, default="BIF")
+    currency = models.CharField(max_length=3, choices=Currency, default=Currency.BIF)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

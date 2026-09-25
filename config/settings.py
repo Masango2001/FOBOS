@@ -122,6 +122,11 @@ SPECTACULAR_SETTINGS = {
     ),
     "VERSION": "0.1.0",
     "SERVE_INCLUDE_SCHEMA": False,
+    "ENUM_NAME_OVERRIDES": {
+        # currency and settlement_currency share the same choice set — merge the
+        # settlement enum into the single shared ledger.Currency enum.
+        "SettlementCurrencyEnum": "ledger.models.Currency",
+    },
 }
 
 SIMPLE_JWT = {
