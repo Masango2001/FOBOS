@@ -11,6 +11,7 @@ urlpatterns: list[URLPattern | URLResolver] = [
     path("", include("ledger.urls")),
     path("", include("automation.urls")),
     path("", include("payments.urls")),
+    path("", include("subscriptions.urls")),
 ]
 
 if settings.DEBUG:

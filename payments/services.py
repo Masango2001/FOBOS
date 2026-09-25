@@ -2,6 +2,9 @@
 
 - `create_checkout_payment` builds a pending Payment for a cart and asks the
   adapter (interface only — real adapters belong to Backend Dev B) for an invoice.
+- `create_subscription_payment` does the same for a SaaS subscription purchase
+  (doc §41): the payment is frozen with `purpose=subscription` and an offer
+  snapshot that the subscription layer activates from on confirmation.
 - `confirm_payment` is THE integration point Backend Dev B calls once a rail
   confirms an order. It is idempotent on `Payment.order_id`: a duplicate call
   returns the existing FinancialEvent and never creates a second one.
@@ -72,9 +75,70 @@ def create_checkout_payment(
             else (int(invoice.amount_bif) if invoice.amount_bif is not None else None)
         ),
         amount_sats=invoice.amount_sats,
+        purpose=Payment.Purpose.CHECKOUT,
         status=Payment.Status.PENDING,
     )
     return payment
+
+
+def create_subscription_payment(
+    *,
+    user: User,
+    offer_id: str,
+    amount: Decimal | None = None,
+) -> Payment:
+    """SaaS subscription purchase (doc §41) — frozen offer, purpose=subscription.
+
+    Unlike checkout the client pays FOBOS directly for a SaaS plan, so there is
+    no product cart. `offer_id` snapshot + final price are frozen in `lines` and
+    `amount_bif`; the subscription layer activates on confirmation (doc §41:
+    Payment=PAID → Subscription=ACTIVE). Idempotently resolved by offer_id and
+    business so repeated calls never create duplicate pending payments.
+    """
+    from subscriptions.models import SubscriptionOffer
+
+    business = user.business
+    if business is None:
+        raise CheckoutError("User has no business.", code="no_business")
+
+    offer = SubscriptionOffer.objects.filter(pk=offer_id).first()
+    if offer is None:
+        raise CheckoutError(f"Offer {offer_id} not found.", code="unknown_offer")
+    if amount is None:
+        # FinalPrice(N) = P×N×(1−D(N)) (doc §54) — computed by the offer, never
+        # hardcoded; the frontend must not influence it.
+        amount = offer.final_price
+    if amount <= 0:
+        raise CheckoutError("'amount' must be positive.")
+
+    rail = rails_by_settlement_preference(business.settlement_preference)
+    adapter = get_adapter(rail)  # raises AdapterNotInstalled if missing
+    snapshots = [
+        {
+            "offer_id": str(offer.id),
+            "plan_id": str(offer.plan_id),
+            "duration_months": offer.duration_months,
+            "discount_rate": str(offer.discount_rate),
+            "unit_price": str(offer.plan.unit_price),
+        }
+    ]
+
+    order_id = uuid.uuid4().hex
+    invoice = adapter.create_invoice(
+        amount=amount, currency="BIF", business=business, order_id=order_id
+    )
+
+    return Payment.objects.create(
+        business=business,
+        rail=rail,
+        order_id=order_id,
+        payment_request=invoice.payment_request,
+        lines=snapshots,
+        currency="BIF",
+        amount_bif=int(amount),
+        purpose=Payment.Purpose.SUBSCRIPTION,
+        status=Payment.Status.PENDING,
+    )
 
 
 def _resolve_cart(
@@ -167,7 +231,7 @@ def confirm_payment(
         )
         # Synchronous signal runs handle_financial_event inside this transaction.
         payment.financial_event = event
-        payment.status = Payment.Status.CONFIRMED
+        payment.status = Payment.Status.PAID
         payment.confirmed_at = confirmed_at
         if amount_bif is not None:
             payment.amount_bif = amount_bif

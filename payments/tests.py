@@ -128,7 +128,7 @@ class TestConfirmPayment:
         assert event.reference == payment.order_id
         assert event.status == "confirmed"
         payment.refresh_from_db()
-        assert payment.status == Payment.Status.CONFIRMED
+        assert payment.status == Payment.Status.PAID
         assert payment.financial_event_id == event.id
 
     def test_duplicate_confirm_returns_same_event(self, owner, product):
@@ -162,9 +162,9 @@ class TestPaymentStatusEndpoint:
 
         assert response.status_code == 200
         body = response.json()
-        assert body["status"] == "confirmed"  # demo adapter reports paid immediately
+        assert body["status"] == "paid"  # demo adapter reports paid immediately
         payment.refresh_from_db()
-        assert payment.status == Payment.Status.CONFIRMED
+        assert payment.status == Payment.Status.PAID
         assert payment.financial_event_id is not None
 
     def test_status_returns_pending_when_failed_confirmation(self, owner_client, owner, product):
@@ -259,10 +259,10 @@ class TestOnramp:
         assert response.status_code == 200
         body = response.json()
         assert body["order_id"] == payment.order_id
-        assert body["status"] == "confirmed"
+        assert body["status"] == "paid"
         assert body["receipt"] is not None
         payment.refresh_from_db()
-        assert payment.status == Payment.Status.CONFIRMED
+        assert payment.status == Payment.Status.PAID
         assert payment.financial_event_id is not None
 
     def test_confirm_otp_is_idempotent(self, owner_client, owner, product):
@@ -277,8 +277,8 @@ class TestOnramp:
         first = owner_client.post("/payments/onramp/confirm", payload, format="json")
         second = owner_client.post("/payments/onramp/confirm", payload, format="json")
 
-        assert first.json()["status"] == "confirmed"
-        assert second.json()["status"] == "confirmed"
+        assert first.json()["status"] == "paid"
+        assert second.json()["status"] == "paid"
         from ledger.models import FinancialEvent
 
         assert FinancialEvent.objects.filter(reference=payment.order_id).count() == 1
@@ -330,7 +330,7 @@ class TestOnramp:
             format="json",
         )
         assert response.status_code == 200
-        assert response.json()["status"] == "confirmed"
+        assert response.json()["status"] == "paid"
 
     def test_request_otp_503_when_adapter_missing(self, owner_client, owner, product):
         self._pending_payment(owner, product)

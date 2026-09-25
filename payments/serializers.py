@@ -1,7 +1,8 @@
 """Payment API serializers — shapes agreed with the Frontend (cashier contract).
 
-Canonical status enum returned to clients: pending | confirmed | failed | expired
-(provider states like PENDING_PAYMENT are internal to the payment rail adapters).
+Canonical status enum returned to clients: pending | paid | failed | expired |
+cancelled (adapter/provider states like PENDING_PAYMENT are internal to the payment
+rail adapters). purpose distinguishes checkout vs subscription (doc §40–41).
 """
 
 from rest_framework import serializers
@@ -21,6 +22,10 @@ class PaymentSerializer(serializers.ModelSerializer):
             "payment_request",
             "amount_bif",
             "amount_sats",
+            "currency",
+            "settlement_currency",
+            "purpose",
+            "rail",
             "lumicash_phone",
             "status",
             "confirmed_at",
