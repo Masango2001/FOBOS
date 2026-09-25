@@ -2,6 +2,7 @@
 
 from django.db import DatabaseError
 from rest_framework import serializers, status
+from rest_framework import generics
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -11,9 +12,43 @@ from drf_spectacular.utils import extend_schema, inline_serializer
 from accounts.permissions import HasBusiness
 from config.openapi import ApiErrorSerializer
 from payments.adapters import AdapterNotInstalled
+from payments.live import ProviderError
+from payments.serializers import PaymentSerializer
 from payments.services import CheckoutError, InsufficientStock, create_checkout_payment
 
-from .serializers import CheckoutSerializer
+from .models import Receipt, Sale
+from .serializers import CheckoutSerializer, ReceiptSerializer, SaleSerializer
+
+
+class SaleListView(generics.ListAPIView):
+    permission_classes = [IsAuthenticated, HasBusiness]
+    serializer_class = SaleSerializer
+
+    def get_queryset(self):
+        queryset = Sale.objects.filter(business=self.request.user.business).select_related("cashier", "financial_event").prefetch_related("sale_lines__product")
+        start = self.request.query_params.get("date_from")
+        end = self.request.query_params.get("date_to")
+        if start:
+            queryset = queryset.filter(created_at__date__gte=start)
+        if end:
+            queryset = queryset.filter(created_at__date__lte=end)
+        return queryset
+
+
+class SaleDetailView(generics.RetrieveAPIView):
+    permission_classes = [IsAuthenticated, HasBusiness]
+    serializer_class = SaleSerializer
+
+    def get_queryset(self):
+        return Sale.objects.filter(business=self.request.user.business).select_related("cashier", "financial_event").prefetch_related("sale_lines__product")
+
+
+class ReceiptDetailView(generics.RetrieveAPIView):
+    permission_classes = [IsAuthenticated, HasBusiness]
+    serializer_class = ReceiptSerializer
+
+    def get_queryset(self):
+        return Receipt.objects.filter(sale__business=self.request.user.business)
 
 
 class CheckoutView(APIView):
@@ -29,8 +64,11 @@ class CheckoutView(APIView):
                 fields={
                     "order_id": serializers.CharField(),
                     "payment_request": serializers.CharField(),
+                    "rail": serializers.CharField(),
+                    "payment_method": serializers.ChoiceField(choices=["qr", "lumicash_otp", "cash"]),
                     "amount_bif": serializers.IntegerField(allow_null=True),
                     "amount_sats": serializers.IntegerField(allow_null=True),
+                    "change": serializers.DecimalField(max_digits=20, decimal_places=2, allow_null=True),
                     "status": serializers.CharField(),
                     "receipt": serializers.JSONField(allow_null=True),
                 },
@@ -39,6 +77,7 @@ class CheckoutView(APIView):
             409: ApiErrorSerializer,
             500: ApiErrorSerializer,
             503: ApiErrorSerializer,
+            502: ApiErrorSerializer,
         },
     )
     def post(self, request):
@@ -51,11 +90,19 @@ class CheckoutView(APIView):
                 lines=data.get("lines"),
                 amount=data.get("amount"),
                 currency=data.get("currency", "BIF"),
+                payment_method=data.get("payment_method", "qr"),
+                customer_phone=data.get("customer_phone", ""),
+                amount_tendered=data.get("amount_tendered"),
             )
         except AdapterNotInstalled as exc:
             return Response(
                 {"code": "adapter_not_installed", "detail": str(exc)},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        except ProviderError as exc:
+            return Response(
+                {"code": "provider_unavailable", "detail": str(exc)},
+                status=502,
             )
         except InsufficientStock as exc:
             return Response(
@@ -76,10 +123,17 @@ class CheckoutView(APIView):
             {
                 "order_id": payment.order_id,
                 "payment_request": payment.payment_request,
+                "rail": payment.rail,
+                "payment_method": data.get("payment_method", "qr"),
                 "amount_bif": payment.amount_bif,
                 "amount_sats": payment.amount_sats,
                 "status": payment.status,
-                "receipt": None,
+                "receipt": PaymentSerializer(payment).data["receipt"],
+                "change": (
+                    str(payment.amount_tendered - payment.total_amount)
+                    if payment.rail == "cash" and payment.amount_tendered is not None
+                    else None
+                ),
             },
             status=status.HTTP_201_CREATED,
         )

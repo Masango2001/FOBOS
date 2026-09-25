@@ -26,3 +26,10 @@ class PaymentsConfig(AppConfig):
             register_adapter(DemoBitLiberaOfframpAdapter())
             register_adapter(DemoBlinkDirectAdapter())
             register_onramp_adapter(DemoBitLiberaOnrampAdapter())
+        elif getattr(settings, "FOBOS_USE_LIVE_ADAPTERS", False):
+            from .adapters import register_adapter, register_onramp_adapter
+            from .live import BitLiberaOfframpAdapter, BitLiberaOnrampAdapter, BlinkDirectAdapter
+
+            register_adapter(BitLiberaOfframpAdapter())
+            register_adapter(BlinkDirectAdapter())
+            register_onramp_adapter(BitLiberaOnrampAdapter())

@@ -14,14 +14,13 @@ from config.openapi import ApiErrorSerializer
 
 from .models import Product
 from .serializers import ProductSerializer
-from .services import build_product_barcode, parse_product_barcode
+from .services import build_internal_ean13, parse_product_barcode
 
 
 class ProductListCreateView(generics.ListCreateAPIView):
     """GET/POST /products — POST is owner-only (inventory is owner mode, §17).
 
-    A product created without a manufacturer barcode gets a FOBOS-generated one
-    embedding name | unit_price | product id (products/services.py).
+    A product created without a manufacturer barcode gets an internal-use EAN-13.
     """
 
     serializer_class = ProductSerializer
@@ -39,8 +38,8 @@ class ProductListCreateView(generics.ListCreateAPIView):
         try:
             product = serializer.save(business=self.request.user.business)
             if not product.barcode:
-                product.barcode = build_product_barcode(
-                    name=product.name, price=product.unit_price, product_id=product.id
+                product.barcode = build_internal_ean13(
+                    product_id=product.id, business_id=product.business_id
                 )
                 product.save(update_fields=["barcode"])
             # LOT 1 rule 5 (/inventory == sum(qty_delta)) is guaranteed by the
@@ -55,8 +54,8 @@ class ProductListCreateView(generics.ListCreateAPIView):
 class ProductScanView(APIView):
     """GET /products/scan/:barcode — cashier mode needs this to build a cart.
 
-    Resolves FOBOS barcodes by their embedded product id (authoritative), then
-    falls back to an exact barcode match for manufacturer codes.
+    Resolves legacy FOBOS codes by embedded product id, then matches current
+    internal EAN-13 and manufacturer codes against this business's catalog.
     """
 
     permission_classes = [IsAuthenticated, HasBusiness]

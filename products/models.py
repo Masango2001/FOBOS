@@ -34,11 +34,13 @@ class Product(models.Model):
     id = models.UUIDField(primary_key=True, default=_uuid.uuid4, editable=False)
     business = models.ForeignKey(Business, on_delete=models.CASCADE, related_name="products")
     name = models.CharField(max_length=200)
+    category = models.CharField(max_length=100, blank=True, default="")
+    unit = models.CharField(max_length=20, blank=True, default="pcs")
     barcode = models.CharField(
         max_length=128,
         null=True,
         blank=True,
-        help_text="Manufacturer barcode, or FOBOS-generated: base64(name|price|id).",
+        help_text="Manufacturer barcode, or FOBOS-generated internal-use EAN-13.",
     )
     barcode_image = models.ImageField(
         upload_to=barcode_image_path,

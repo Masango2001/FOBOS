@@ -53,14 +53,11 @@ class PaymentSerializer(serializers.ModelSerializer):
 class OnrampRequestSerializer(serializers.Serializer):
     """POST /payments/onramp/request-otp — Lumicash OTP (Tech Spec §4)."""
 
-    customer_phone = serializers.CharField(max_length=30)
-    amount = serializers.DecimalField(max_digits=20, decimal_places=2)
+    order_id = serializers.CharField(max_length=64)
 
 
 class OnrampConfirmSerializer(serializers.Serializer):
     """POST /payments/onramp/confirm — executes the OTP against an order (Tech Spec §4)."""
 
-    customer_phone = serializers.CharField(max_length=30)
-    amount = serializers.DecimalField(max_digits=20, decimal_places=2)
     otp = serializers.CharField(max_length=10)
     order_id = serializers.CharField(max_length=64)

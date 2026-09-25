@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from products.services import parse_product_barcode
+from products.services import calculate_ean13_check_digit, parse_product_barcode
 
 
 @pytest.fixture
@@ -40,7 +40,7 @@ class TestProductCreate:
         response = cashier_client.post("/products", payload, format="json")
         assert response.status_code == 403
 
-    def test_barcode_can_be_blank_auto_generates_fobos_barcode(self, owner_client, business):
+    def test_blank_barcode_generates_internal_ean13(self, owner_client, business):
         payload = {
             "name": "No barcode",
             "unit_cost": "10.00",
@@ -52,12 +52,13 @@ class TestProductCreate:
 
         assert response.status_code == 201
         barcode = response.json()["barcode"]
-        assert barcode.startswith("F.")
-        decoded = parse_product_barcode(barcode)
-        assert decoded is not None
-        assert decoded.name == "No barcode"
-        assert decoded.price == "30.00"
-        assert decoded.product_id == response.json()["id"]
+        assert len(barcode) == 13
+        assert barcode.startswith("20")
+        assert barcode[-1] == calculate_ean13_check_digit(barcode[:12])
+        assert business.products.get(id=response.json()["id"]).barcode == barcode
+        scanned = owner_client.get(f"/products/scan/{barcode}")
+        assert scanned.status_code == 200
+        assert scanned.json()["id"] == response.json()["id"]
 
     def test_duplicate_barcode_rejected(self, owner_client, payload, product, business):
         payload["barcode"] = product.barcode

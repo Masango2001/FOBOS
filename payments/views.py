@@ -10,12 +10,10 @@ asks the provider to SMS an OTP; confirm validates it and confirms the Payment.
 Canonical statuses returned to clients: pending | confirmed | failed | expired.
 """
 
-import uuid
-from rest_framework import status
+from rest_framework import serializers, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework import serializers
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema, inline_serializer
 
@@ -23,6 +21,7 @@ from accounts.permissions import HasBusiness
 from config.openapi import ApiErrorSerializer
 
 from .adapters import AdapterNotInstalled, OnrampOtpError, get_adapter, get_onramp_adapter
+from .live import ProviderError
 from .models import Payment
 from .serializers import (
     OnrampConfirmSerializer,
@@ -40,10 +39,10 @@ class PaymentStatusView(APIView):
     permission_classes = [IsAuthenticated, HasBusiness]
 
     @extend_schema(
-        responses={200: PaymentSerializer, 404: ApiErrorSerializer, 503: ApiErrorSerializer}
+        responses={200: PaymentSerializer, 404: ApiErrorSerializer, 503: ApiErrorSerializer, 502: ApiErrorSerializer}
     )
-    def get(self, request, pk: uuid.UUID):
-        payment = Payment.objects.filter(business=request.user.business, pk=pk).first()
+    def get(self, request, order_id: str):
+        payment = Payment.objects.filter(business=request.user.business, order_id=order_id).first()
         if payment is None:
             return Response({"detail": "Payment not found."}, status=status.HTTP_404_NOT_FOUND)
 
@@ -58,6 +57,8 @@ class PaymentStatusView(APIView):
                     },
                     status=status.HTTP_503_SERVICE_UNAVAILABLE,
                 )
+            except ProviderError as exc:
+                return Response({"code": "provider_unavailable", "detail": str(exc)}, status=502)
             if adapter_status.status in CONFIRMED_STATES:
                 confirm_payment(
                     order_id=payment.order_id,
@@ -94,11 +95,21 @@ class OnrampRequestOtpView(APIView):
             ),
             400: OpenApiTypes.OBJECT,
             503: ApiErrorSerializer,
+            502: ApiErrorSerializer,
         },
     )
     def post(self, request):
         serializer = OnrampRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        payment = Payment.objects.filter(
+            business=request.user.business,
+            order_id=serializer.validated_data["order_id"],
+            rail=ONRAMP_RAIL,
+        ).first()
+        if payment is None:
+            return Response({"detail": "Lumicash order not found."}, status=status.HTTP_404_NOT_FOUND)
+        if payment.status != Payment.Status.PENDING:
+            return Response({"detail": "Order is no longer pending."}, status=status.HTTP_409_CONFLICT)
         try:
             adapter = get_onramp_adapter(ONRAMP_RAIL)
         except AdapterNotInstalled:
@@ -106,10 +117,15 @@ class OnrampRequestOtpView(APIView):
                 {"code": "adapter_not_installed", "detail": "On-ramp adapter is not installed."},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
-        sent = adapter.request_otp(
-            customer_phone=serializer.validated_data["customer_phone"],
-            amount=serializer.validated_data["amount"],
-        )
+        try:
+            sent = adapter.request_otp(
+                customer_phone=payment.lumicash_phone,
+                amount=payment.total_amount,
+                business=payment.business,
+                order_id=payment.order_id,
+            )
+        except ProviderError as exc:
+            return Response({"code": "provider_unavailable", "detail": str(exc)}, status=502)
         body = {"status": sent.status}
         if sent.demo_otp is not None:
             body["demo_otp"] = sent.demo_otp
@@ -135,13 +151,15 @@ class OnrampConfirmView(APIView):
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
         payment = Payment.objects.filter(
-            business=request.user.business, order_id=data["order_id"]
+            business=request.user.business, order_id=data["order_id"], rail=ONRAMP_RAIL
         ).first()
         if payment is None:
             return Response({"detail": "Payment not found."}, status=status.HTTP_404_NOT_FOUND)
         if payment.status == Payment.Status.CONFIRMED:
             # Idempotent retry (PRD §32): the OTP was already consumed, the order is done.
             return Response(PaymentSerializer(payment).data, status=status.HTTP_200_OK)
+        if payment.status != Payment.Status.PENDING:
+            return Response({"detail": "Order is no longer pending."}, status=status.HTTP_409_CONFLICT)
         try:
             adapter = get_onramp_adapter(ONRAMP_RAIL)
         except AdapterNotInstalled:
@@ -151,15 +169,19 @@ class OnrampConfirmView(APIView):
             )
         try:
             adapter.confirm_otp(
-                customer_phone=data["customer_phone"],
-                amount=data["amount"],
+                customer_phone=payment.lumicash_phone,
+                amount=payment.total_amount,
                 otp=data["otp"],
+                business=payment.business,
+                order_id=payment.order_id,
             )
         except OnrampOtpError as exc:
             return Response(
                 {"code": exc.code, "detail": str(exc)},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        except ProviderError as exc:
+            return Response({"code": "provider_unavailable", "detail": str(exc)}, status=502)
         confirm_payment(
             order_id=payment.order_id,
             amount_bif=payment.amount_bif,

@@ -1,0 +1,78 @@
+databases:
+  - name: fobos-commerce-ledger-db
+    databaseName: fobos
+    user: fobos
+    plan: basic_256mb
+
+services:
+  - type: web
+    name: fobos-commerce-ledger-api
+    runtime: docker
+    branch: feat/openapi-api-view-contracts
+    plan: starter
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    preDeployCommand: python manage.py migrate && python manage.py collectstatic --noinput
+    dockerCommand: gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers 3 --timeout 60
+    healthCheckPath: /health/
+    disk:
+      name: fobos-media
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DJANGO_DEBUG
+        value: "false"
+      - key: DJANGO_ALLOWED_HOSTS
+        fromService:
+          name: fobos-commerce-ledger-api
+          type: web
+          envVarKey: RENDER_EXTERNAL_HOSTNAME
+      - key: POSTGRES_DB
+        fromDatabase:
+          name: fobos-commerce-ledger-db
+          property: database
+      - key: POSTGRES_USER
+        fromDatabase:
+          name: fobos-commerce-ledger-db
+          property: user
+      - key: POSTGRES_PASSWORD
+        fromDatabase:
+          name: fobos-commerce-ledger-db
+          property: password
+      - key: POSTGRES_HOST
+        fromDatabase:
+          name: fobos-commerce-ledger-db
+          property: host
+      - key: POSTGRES_PORT
+        fromDatabase:
+          name: fobos-commerce-ledger-db
+          property: port
+      - key: MEDIA_ROOT
+        value: /var/data/media
+      - key: APP_BASE_URL
+        fromService:
+          name: fobos-commerce-ledger-api
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: FOBOS_USE_DEMO_ADAPTERS
+        value: "false"
+      - key: FOBOS_USE_LIVE_ADAPTERS
+        value: "false"
+      - key: EMAIL_BACKEND
+        value: django.core.mail.backends.smtp.EmailBackend
+      - key: EMAIL_HOST
+        value: smtp.gmail.com
+      - key: EMAIL_PORT
+        value: "587"
+      - key: EMAIL_USE_TLS
+        value: "true"
+      - key: EMAIL_HOST_USER
+        sync: false
+      - key: EMAIL_HOST_PASSWORD
+        sync: false
+      - key: DEFAULT_FROM_EMAIL
+        sync: false
+      - key: CORS_ALLOWED_ORIGINS
+        value: https://fobos-pos.vercel.app

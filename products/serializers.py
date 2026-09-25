@@ -13,6 +13,8 @@ class ProductSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "name",
+            "category",
+            "unit",
             "barcode",
             "barcode_image_url",
             "unit_cost",

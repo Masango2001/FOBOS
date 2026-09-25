@@ -48,12 +48,12 @@ class DemoBitLiberaOnrampAdapter(OnrampAdapter):
     def __init__(self) -> None:
         self._otps: dict[tuple[str, str], str] = {}
 
-    def request_otp(self, *, customer_phone: str, amount: Decimal) -> AdapterOtpSent:
+    def request_otp(self, *, customer_phone: str, amount: Decimal, business=None, order_id="") -> AdapterOtpSent:
         code = f"{secrets.randbelow(1_000_000):06d}"
         self._otps[(customer_phone, str(amount))] = code
         return AdapterOtpSent(status="otp_sent", demo_otp=code)
 
-    def confirm_otp(self, *, customer_phone: str, amount: Decimal, otp: str) -> None:
+    def confirm_otp(self, *, customer_phone: str, amount: Decimal, otp: str, business=None, order_id="") -> None:
         stored = self._otps.pop((customer_phone, str(amount)), None)
         if stored is None or stored != otp:
             raise OnrampOtpError("Invalid or expired OTP.")

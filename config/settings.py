@@ -31,6 +31,7 @@ def _required(name: str) -> str:
 
 SECRET_KEY = _required("DJANGO_SECRET_KEY")
 DEBUG = (os.getenv("DJANGO_DEBUG") or "False").lower() == "true"
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 ALLOWED_HOSTS = [
     host.strip()
     for host in (os.getenv("DJANGO_ALLOWED_HOSTS") or "localhost,127.0.0.1").split(",")
@@ -47,6 +48,7 @@ INSTALLED_APPS = [
     "rest_framework",
     "rest_framework_simplejwt",
     "drf_spectacular",
+    "corsheaders",
     "accounts",
     "products",
     "ledger",
@@ -58,6 +60,8 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
@@ -135,6 +139,7 @@ SIMPLE_JWT = {
 FOBOS_USE_DEMO_ADAPTERS = (
     os.getenv("FOBOS_USE_DEMO_ADAPTERS") or ("true" if DEBUG else "false")
 ).lower() == "true"
+FOBOS_USE_LIVE_ADAPTERS = (os.getenv("FOBOS_USE_LIVE_ADAPTERS") or "false").lower() == "true"
 
 # Email verification link
 EMAIL_VERIFICATION_MAX_AGE_SECONDS = int(
@@ -157,11 +162,18 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = "static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
+STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+MEDIA_ROOT = Path(os.getenv("MEDIA_ROOT") or BASE_DIR / "media")
+CORS_ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in (os.getenv("CORS_ALLOWED_ORIGINS") or "").split(",")
+    if origin.strip()
+]
 
 # Local file storage (Docker named volume `media`, mounted at /app/media).
 # Product barcode images are persisted here — swap MEDIA_ROOT/DEFAULT_FILE_STORAGE
 # for an object store (S3/MinIO) when the infra is provisioned.
-MEDIA_URL = "media/"
-MEDIA_ROOT = BASE_DIR / "media"
+MEDIA_URL = "/media/"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"

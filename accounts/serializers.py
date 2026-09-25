@@ -6,6 +6,41 @@ from .models import Business, User
 from .services import send_verification_email
 
 
+class BusinessSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Business
+        fields = ["id", "name", "category", "settlement_preference", "lumicash_number", "blink_username"]
+        read_only_fields = ["id"]
+
+    def validate(self, attrs):
+        preference = attrs.get("settlement_preference", self.instance.settlement_preference)
+        phone = attrs.get("lumicash_number", self.instance.lumicash_number)
+        blink = attrs.get("blink_username", self.instance.blink_username)
+        if preference == Business.SettlementPreference.BIF_LUMICASH and not phone:
+            raise serializers.ValidationError({"lumicash_number": "Required for BIF settlement."})
+        if preference == Business.SettlementPreference.AS_IS and not blink:
+            raise serializers.ValidationError({"blink_username": "Required for Blink settlement."})
+        return attrs
+
+
+class AuthenticatedUserSerializer(serializers.ModelSerializer):
+    business_id = serializers.UUIDField(read_only=True, allow_null=True)
+
+    class Meta:
+        model = User
+        fields = ["id", "email", "name", "phone", "role", "business_id"]
+        read_only_fields = fields
+
+
+class SignupResponseSerializer(serializers.ModelSerializer):
+    detail = serializers.CharField(read_only=True)
+
+    class Meta:
+        model = User
+        fields = ["id", "email", "detail"]
+        read_only_fields = fields
+
+
 class EmailNotVerifiedError(AuthenticationFailed):
     """Raised by the login serializer when the account is unverified."""
 

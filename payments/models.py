@@ -13,6 +13,7 @@ class Payment(models.Model):
         BITLIBERA_OFFRAMP = "bitlibera_offramp", "BitLibera off-ramp"
         BITLIBERA_ONRAMP = "bitlibera_onramp", "BitLibera on-ramp"
         BLINK_DIRECT = "blink_direct", "Blink direct"
+        CASH = "cash", "Cash"
 
     class Status(models.TextChoices):
         PENDING = "pending", "pending"
@@ -36,6 +37,7 @@ class Payment(models.Model):
     payment_request = models.TextField(blank=True, default="")
     amount_sats = models.BigIntegerField(null=True, blank=True)
     amount_bif = models.BigIntegerField(null=True, blank=True)
+    amount_tendered = models.DecimalField(max_digits=20, decimal_places=2, null=True, blank=True)
     lumicash_phone = models.CharField(max_length=30, blank=True, default="")
     lines = models.JSONField(
         default=list,

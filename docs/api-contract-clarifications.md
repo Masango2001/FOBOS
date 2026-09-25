@@ -159,17 +159,17 @@ Décision d'architecture validée avec le Frontend/owner :
 - La contrainte d'unicité `uniq_business_barcode` est inchangée (UUID ⇒
   collision impossible entre barcodes auto-générés).
 
-### 6.2 Barcode FOBOS auto-généré (content : nom, prix, id)
+### 6.2 Barcode IAN-13 interne FOBOS auto-généré
 
-- **Règle** : un produit créé **sans** barcode fabricant reçoit un barcode
-  FOBOS automatiquement — il encode `name | unit_price | product_id`
-  (`products/services.py`, encodage `F.` + base64url JSON). Autonomie du caissier :
-  le scanner décode le code pour retrouver le produit par son id sans table de
-  correspondance.
-- `GET /products/scan/:barcode` : résout d'abord le payload FOBOS par `id`,
-  sinon correspondance exacte sur le barcode fabricant (ex. EAN numérique) —
-  rétro-compatible.
-- `barcode` passe à `max_length=128` (le code généré fait < 120 caractères).
+- **Règle** : un produit créé **sans** barcode fabricant reçoit un code-barres
+  IAN-13 interne dont le chiffre de contrôle est calculé côté backend. Le code
+  utilise le préfixe GS1 à circulation restreinte `20`, pour l'identification
+  interne au catalogue marchand; ce préfixe ne remplace pas une attribution GS1
+  pour la commercialisation nationale ou internationale.
+- `GET /products/scan/:barcode` : recherche le code exact dans le catalogue du
+  commerce. Les anciens codes FOBOS `F.` encodés restent résolus par leur id.
+- `barcode` conserve `max_length=128` pour accepter les codes historiques et les
+  codes fabricant, bien que le nouveau code généré fasse 13 chiffres.
 - **Image du barcode** : `GET /products/<uuid:pk>/barcode` renvoie une image
   PNG scannable (Code128, `python-barcode` + `Pillow`, `products/services.py`)
   — lisible/affichable par le front sans lib client. Cache

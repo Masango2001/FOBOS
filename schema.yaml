@@ -5,6 +5,69 @@ info:
   description: Backend Commerce & Ledger de la Financial Operations Platform — produits,
     stock, ledger, automations et paiements (MVP).
 paths:
+  /auth/business:
+    get:
+      operationId: auth_business_retrieve
+      tags:
+      - auth
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Business'
+          description: ''
+    put:
+      operationId: auth_business_update
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Business'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Business'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Business'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Business'
+          description: ''
+    patch:
+      operationId: auth_business_partial_update
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedBusiness'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedBusiness'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedBusiness'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Business'
+          description: ''
   /auth/cashiers:
     get:
       operationId: auth_cashiers_list
@@ -203,6 +266,20 @@ paths:
               schema:
                 $ref: '#/components/schemas/FobosTokenObtainPair'
           description: ''
+  /auth/me:
+    get:
+      operationId: auth_me_retrieve
+      tags:
+      - auth
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticatedUser'
+          description: ''
   /auth/resend-verification:
     post:
       operationId: auth_resend_verification_create
@@ -265,6 +342,33 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Signup'
+          description: ''
+  /auth/token/refresh:
+    post:
+      operationId: auth_token_refresh_create
+      description: |-
+        Takes a refresh type JSON web token and returns an access type JSON web
+        token if the refresh token is valid.
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenRefresh'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TokenRefresh'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TokenRefresh'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenRefresh'
           description: ''
   /auth/verify-email/{token}/:
     get:
@@ -406,6 +510,12 @@ paths:
                 $ref: '#/components/schemas/ApiError'
           description: ''
         '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '502':
           content:
             application/json:
               schema:
@@ -596,15 +706,14 @@ paths:
                 items:
                   $ref: '#/components/schemas/LedgerEntry'
           description: ''
-  /payments/{id}/status:
+  /payments/{order_id}/status:
     get:
       operationId: payments_status_retrieve
       parameters:
       - in: path
-        name: id
+        name: order_id
         schema:
           type: string
-          format: uuid
         required: true
       tags:
       - payments
@@ -624,6 +733,12 @@ paths:
                 $ref: '#/components/schemas/ApiError'
           description: ''
         '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '502':
           content:
             application/json:
               schema:
@@ -716,14 +831,19 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+        '502':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /products:
     get:
       operationId: products_list
       description: |-
         GET/POST /products — POST is owner-only (inventory is owner mode, §17).
 
-        A product created without a manufacturer barcode gets a FOBOS-generated one
-        embedding name | unit_price | product id (products/services.py).
+        A product created without a manufacturer barcode gets an internal-use EAN-13.
       tags:
       - products
       security:
@@ -742,8 +862,7 @@ paths:
       description: |-
         GET/POST /products — POST is owner-only (inventory is owner mode, §17).
 
-        A product created without a manufacturer barcode gets a FOBOS-generated one
-        embedding name | unit_price | product id (products/services.py).
+        A product created without a manufacturer barcode gets an internal-use EAN-13.
       tags:
       - products
       requestBody:
@@ -773,8 +892,8 @@ paths:
       description: |-
         GET /products/scan/:barcode — cashier mode needs this to build a cart.
 
-        Resolves FOBOS barcodes by their embedded product id (authoritative), then
-        falls back to an exact barcode match for manufacturer codes.
+        Resolves legacy FOBOS codes by embedded product id, then matches current
+        internal EAN-13 and manufacturer codes against this business's catalog.
       parameters:
       - in: path
         name: barcode
@@ -798,6 +917,64 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /receipts/{id}:
+    get:
+      operationId: receipts_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - receipts
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Receipt'
+          description: ''
+  /sales:
+    get:
+      operationId: sales_list
+      tags:
+      - sales
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Sale'
+          description: ''
+  /sales/{id}:
+    get:
+      operationId: sales_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - sales
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Sale'
+          description: ''
 components:
   schemas:
     ApiError:
@@ -810,6 +987,39 @@ components:
           type: string
       required:
       - detail
+    AuthenticatedUser:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        email:
+          type: string
+          format: email
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        phone:
+          type: string
+          readOnly: true
+        role:
+          allOf:
+          - $ref: '#/components/schemas/RoleEnum'
+          readOnly: true
+        business_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+      required:
+      - business_id
+      - email
+      - id
+      - name
+      - phone
+      - role
     AutomationExecution:
       type: object
       properties:
@@ -856,6 +1066,32 @@ components:
       required:
       - created_at
       - id
+    Business:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          maxLength: 150
+        category:
+          type: string
+          maxLength: 100
+        settlement_preference:
+          $ref: '#/components/schemas/SettlementPreferenceEnum'
+        lumicash_number:
+          type: string
+          description: Required when settlement_preference = bif_lumicash
+          maxLength: 30
+        blink_username:
+          type: string
+          description: Required when settlement_preference = as_is
+          maxLength: 100
+      required:
+      - id
+      - name
     Cashier:
       type: object
       description: |-
@@ -963,6 +1199,17 @@ components:
           allOf:
           - $ref: '#/components/schemas/CheckoutCurrencyEnum'
           default: BIF
+        payment_method:
+          allOf:
+          - $ref: '#/components/schemas/CheckoutPaymentMethodEnum'
+          default: qr
+        customer_phone:
+          type: string
+          maxLength: 30
+        amount_tendered:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,18}(?:\.\d{0,2})?$
     CheckoutCurrencyEnum:
       enum:
       - BIF
@@ -973,6 +1220,16 @@ components:
         * `BIF` - BIF
         * `USD` - USD
         * `SAT` - SAT
+    CheckoutPaymentMethodEnum:
+      enum:
+      - qr
+      - lumicash_otp
+      - cash
+      type: string
+      description: |-
+        * `qr` - QR invoice
+        * `lumicash_otp` - Lumicash OTP
+        * `cash` - Cash
     CheckoutResponse:
       type: object
       properties:
@@ -980,11 +1237,20 @@ components:
           type: string
         payment_request:
           type: string
+        rail:
+          type: string
+        payment_method:
+          $ref: '#/components/schemas/CheckoutResponsePaymentMethodEnum'
         amount_bif:
           type: integer
           nullable: true
         amount_sats:
           type: integer
+          nullable: true
+        change:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,18}(?:\.\d{0,2})?$
           nullable: true
         status:
           type: string
@@ -993,10 +1259,33 @@ components:
       required:
       - amount_bif
       - amount_sats
+      - change
       - order_id
+      - payment_method
       - payment_request
+      - rail
       - receipt
       - status
+    CheckoutResponsePaymentMethodEnum:
+      enum:
+      - qr
+      - lumicash_otp
+      - cash
+      type: string
+      description: |-
+        * `qr` - qr
+        * `lumicash_otp` - lumicash_otp
+        * `cash` - cash
+    Currency45aEnum:
+      enum:
+      - BIF
+      - USD
+      - SAT
+      type: string
+      description: |-
+        * `BIF` - Burundian Franc
+        * `USD` - US Dollar
+        * `SAT` - Sats
     DashboardAlert:
       type: object
       properties:
@@ -1160,7 +1449,7 @@ components:
           format: decimal
           pattern: ^-?\d{0,18}(?:\.\d{0,2})?$
         currency:
-          $ref: '#/components/schemas/LedgerEntryCurrencyEnum'
+          $ref: '#/components/schemas/Currency45aEnum'
         financial_event_id:
           type: string
           format: uuid
@@ -1176,16 +1465,6 @@ components:
       - financial_event_id
       - id
       - type
-    LedgerEntryCurrencyEnum:
-      enum:
-      - BIF
-      - USD
-      - SAT
-      type: string
-      description: |-
-        * `BIF` - Burundian Franc
-        * `USD` - US Dollar
-        * `SAT` - Sats
     LedgerEntryTypeEnum:
       enum:
       - credit
@@ -1199,13 +1478,6 @@ components:
       description: POST /payments/onramp/confirm — executes the OTP against an order
         (Tech Spec §4).
       properties:
-        customer_phone:
-          type: string
-          maxLength: 30
-        amount:
-          type: string
-          format: decimal
-          pattern: ^-?\d{0,18}(?:\.\d{0,2})?$
         otp:
           type: string
           maxLength: 10
@@ -1213,24 +1485,17 @@ components:
           type: string
           maxLength: 64
       required:
-      - amount
-      - customer_phone
       - order_id
       - otp
     OnrampRequest:
       type: object
       description: POST /payments/onramp/request-otp — Lumicash OTP (Tech Spec §4).
       properties:
-        customer_phone:
+        order_id:
           type: string
-          maxLength: 30
-        amount:
-          type: string
-          format: decimal
-          pattern: ^-?\d{0,18}(?:\.\d{0,2})?$
+          maxLength: 64
       required:
-      - amount
-      - customer_phone
+      - order_id
     OnrampRequestOtpResponse:
       type: object
       properties:
@@ -1241,6 +1506,29 @@ components:
           nullable: true
       required:
       - status
+    PatchedBusiness:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          maxLength: 150
+        category:
+          type: string
+          maxLength: 100
+        settlement_preference:
+          $ref: '#/components/schemas/SettlementPreferenceEnum'
+        lumicash_number:
+          type: string
+          description: Required when settlement_preference = bif_lumicash
+          maxLength: 30
+        blink_username:
+          type: string
+          description: Required when settlement_preference = as_is
+          maxLength: 100
     PatchedCashier:
       type: object
       description: |-
@@ -1335,10 +1623,16 @@ components:
         name:
           type: string
           maxLength: 200
+        category:
+          type: string
+          maxLength: 100
+        unit:
+          type: string
+          maxLength: 20
         barcode:
           type: string
           nullable: true
-          description: 'Manufacturer barcode, or FOBOS-generated: base64(name|price|id).'
+          description: Manufacturer barcode, or FOBOS-generated internal-use EAN-13.
           maxLength: 128
         barcode_image_url:
           type: string
@@ -1370,6 +1664,21 @@ components:
       - id
       - name
       - unit_price
+    Receipt:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        content: {}
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
     ReceiptResponse:
       type: object
       properties:
@@ -1407,6 +1716,129 @@ components:
       description: |-
         * `owner` - Owner
         * `cashier` - Cashier
+    Sale:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        business_id:
+          type: string
+          format: uuid
+          readOnly: true
+        financial_event_id:
+          type: string
+          format: uuid
+          description: One sale per confirmed event — DB-level idempotency guard.
+          readOnly: true
+        order_id:
+          type: string
+          readOnly: true
+        cashier_id:
+          type: string
+          format: uuid
+          nullable: true
+          readOnly: true
+        cashier_name:
+          type: string
+          readOnly: true
+          nullable: true
+        receipt_number:
+          type: string
+          readOnly: true
+        total_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,18}(?:\.\d{0,2})?$
+        tax_amount:
+          type: number
+          format: double
+          readOnly: true
+        gross_profit:
+          type: number
+          format: double
+          readOnly: true
+        gross_margin_percent:
+          type: number
+          format: double
+          readOnly: true
+        currency:
+          $ref: '#/components/schemas/Currency45aEnum'
+        payment_rail:
+          type: string
+          readOnly: true
+        payment_reference:
+          type: string
+          readOnly: true
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/SaleLine'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - business_id
+      - cashier_id
+      - cashier_name
+      - created_at
+      - financial_event_id
+      - gross_margin_percent
+      - gross_profit
+      - id
+      - lines
+      - order_id
+      - payment_rail
+      - payment_reference
+      - receipt_number
+      - tax_amount
+      - total_amount
+    SaleLine:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        product_id:
+          type: string
+          format: uuid
+          readOnly: true
+        product_name:
+          type: string
+          readOnly: true
+        quantity:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        unit_price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,18}(?:\.\d{0,2})?$
+        unit_cost:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,18}(?:\.\d{0,2})?$
+        line_cogs:
+          type: number
+          format: double
+          readOnly: true
+        line_gross_profit:
+          type: number
+          format: double
+          readOnly: true
+      required:
+      - id
+      - line_cogs
+      - line_gross_profit
+      - product_id
+      - product_name
+      - quantity
+      - unit_cost
+      - unit_price
     SettlementPreferenceEnum:
       enum:
       - as_is
@@ -1584,6 +2016,18 @@ components:
       - product_id
       - quantity
       - reason
+    TokenRefresh:
+      type: object
+      properties:
+        access:
+          type: string
+          readOnly: true
+        refresh:
+          type: string
+          writeOnly: true
+      required:
+      - access
+      - refresh
   securitySchemes:
     jwtAuth:
       type: http

@@ -42,6 +42,9 @@ def create_checkout_payment(
     lines: list[dict[str, Any]] | None = None,
     amount: Decimal | None = None,
     currency: str = "BIF",
+    payment_method: str = "qr",
+    customer_phone: str = "",
+    amount_tendered: Decimal | None = None,
 ) -> Payment:
     """POST /cart/checkout — Tech Spec §3 step 1."""
     business = user.business
@@ -51,29 +54,53 @@ def create_checkout_payment(
         raise CheckoutError(f"Unsupported currency '{currency}'.", code="bad_currency")
 
     snapshots, total = _resolve_cart(business, lines=lines, amount=amount)
-    rail = rails_by_settlement_preference(business.settlement_preference)
-    adapter = get_adapter(rail)  # raises AdapterNotInstalled if missing
-
     order_id = uuid.uuid4().hex
-    invoice = adapter.create_invoice(
-        amount=total, currency=currency, business=business, order_id=order_id
-    )
+    if payment_method not in {"qr", "lumicash_otp", "cash"}:
+        raise CheckoutError("Unsupported payment method.", code="bad_payment_method")
+    if payment_method == "cash":
+        if currency != "BIF":
+            raise CheckoutError("Cash payments must be in BIF.", code="bad_currency")
+        if amount_tendered is None or amount_tendered < total:
+            raise CheckoutError("Cash tendered must cover the order total.", code="insufficient_tender")
+        rail = Payment.Rail.CASH
+        invoice = None
+    elif payment_method == "lumicash_otp":
+        rail = Payment.Rail.BITLIBERA_ONRAMP
+        invoice = None
+        if not customer_phone:
+            raise CheckoutError("A customer Lumicash phone is required.", code="phone_required")
+    else:
+        rail = rails_by_settlement_preference(business.settlement_preference)
+        adapter = get_adapter(rail)
+        invoice = adapter.create_invoice(
+            amount=total, currency=currency, business=business, order_id=order_id
+        )
 
     payment = Payment.objects.create(
         business=business,
         rail=rail,
         order_id=order_id,
-        payment_request=invoice.payment_request,
+        payment_request=invoice.payment_request if invoice else "",
         lines=snapshots,
         currency=currency,
         amount_bif=(
             int(total)
             if currency == "BIF"
-            else (int(invoice.amount_bif) if invoice.amount_bif is not None else None)
+            else (int(invoice.amount_bif) if invoice and invoice.amount_bif is not None else None)
         ),
-        amount_sats=invoice.amount_sats,
+        amount_sats=invoice.amount_sats if invoice else None,
+        amount_tendered=amount_tendered,
+        lumicash_phone=customer_phone if payment_method == "lumicash_otp" else "",
         status=Payment.Status.PENDING,
     )
+    if payment_method == "cash":
+        confirm_payment(
+            order_id=payment.order_id,
+            amount_bif=int(total),
+            actor=user.email,
+            metadata={"amount_tendered": str(amount_tendered), "change": str(amount_tendered - total)},
+        )
+        payment.refresh_from_db()
     return payment
 
 

@@ -14,6 +14,8 @@ from rest_framework import serializers as drf_serializers
 from .models import User
 from .permissions import IsOwner
 from .serializers import (
+    BusinessSerializer,
+    AuthenticatedUserSerializer,
     CashierCreateSerializer,
     CashierSerializer,
     ResendVerificationSerializer,
@@ -25,6 +27,22 @@ from .services import send_verification_email, verify_verification_token
 class SignupView(generics.CreateAPIView):
     serializer_class = SignupSerializer
     permission_classes = [permissions.AllowAny]
+
+
+class BusinessView(generics.RetrieveUpdateAPIView):
+    serializer_class = BusinessSerializer
+    permission_classes = [permissions.IsAuthenticated, IsOwner]
+
+    def get_object(self):
+        return self.request.user.business
+
+
+class CurrentUserView(generics.RetrieveAPIView):
+    serializer_class = AuthenticatedUserSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_object(self):
+        return self.request.user
 
 
 class VerifyEmailView(APIView):

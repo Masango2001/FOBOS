@@ -31,6 +31,7 @@ class FinancialEvent(models.Model):
         BITLIBERA_OFFRAMP = "bitlibera_offramp", "BitLibera off-ramp"
         BITLIBERA_ONRAMP = "bitlibera_onramp", "BitLibera on-ramp"
         BLINK_DIRECT = "blink_direct", "Blink direct"
+        CASH = "cash", "Cash"
 
     class Status(models.TextChoices):
         PENDING = "pending", "pending"
