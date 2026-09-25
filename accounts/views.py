@@ -21,7 +21,7 @@ from .serializers import (
     ResendVerificationSerializer,
     SignupSerializer,
 )
-from .services import send_verification_email, verify_verification_token
+from .services import verify_verification_token
 
 
 class SignupView(generics.CreateAPIView):
@@ -122,7 +122,7 @@ class CashierDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 
 class ResendVerificationView(APIView):
-    """Send a fresh signed link. Generic 200 response — never leaks whether the email exists."""
+    """Legacy endpoint retained for clients that still request verification emails."""
 
     permission_classes = [permissions.AllowAny]
 
@@ -139,12 +139,8 @@ class ResendVerificationView(APIView):
     def post(self, request: Request) -> Response:
         serializer = ResendVerificationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        email = serializer.validated_data["email"]
-        user = User.objects.filter(email__iexact=email, email_verified=False).first()
-        if user is not None:
-            send_verification_email(user.pk, user.email)
         return Response(
-            {"detail": "If the account exists, a new verification link has been sent."},
+            {"detail": "Email verification is not required for FOBOS accounts."},
             status=status.HTTP_200_OK,
         )
 

@@ -1,9 +1,7 @@
 from django.urls import path
-from rest_framework import status
-from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
-from .serializers import EmailNotVerifiedError, FobosTokenObtainPairSerializer
+from .serializers import FobosTokenObtainPairSerializer
 from .views import (
     CashierDetailView,
     CashierListCreateView,
@@ -17,18 +15,6 @@ from .views import (
 
 class FobosTokenObtainPairView(TokenObtainPairView):
     serializer_class = FobosTokenObtainPairSerializer
-
-    def post(self, request, *args, **kwargs):
-        try:
-            return super().post(request, *args, **kwargs)
-        except EmailNotVerifiedError:
-            return Response(
-                {
-                    "detail": "Email not verified. Check your inbox for the verification link.",
-                    "code": "email_not_verified",
-                },
-                status=status.HTTP_401_UNAUTHORIZED,
-            )
 
 
 urlpatterns = [
