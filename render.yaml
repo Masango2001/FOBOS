@@ -8,6 +8,7 @@ services:
   - type: web
     name: fobos-commerce-ledger-api
     runtime: docker
+    repo: https://github.com/Masango2001/FOBOS.git
     branch: feat/openapi-api-view-contracts
     plan: starter
     dockerfilePath: ./Dockerfile
