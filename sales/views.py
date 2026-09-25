@@ -68,6 +68,15 @@ class CheckoutView(APIView):
                     "payment_method": serializers.ChoiceField(choices=["qr", "lumicash_otp", "cash"]),
                     "amount_bif": serializers.IntegerField(allow_null=True),
                     "amount_sats": serializers.IntegerField(allow_null=True),
+                    "settlement_currency": serializers.CharField(),
+                    "settlement_amount": serializers.DecimalField(
+                        max_digits=24, decimal_places=8, allow_null=True
+                    ),
+                    "exchange_rate": serializers.DecimalField(
+                        max_digits=24, decimal_places=12, allow_null=True
+                    ),
+                    "rate_source": serializers.CharField(),
+                    "rate_timestamp": serializers.DateTimeField(allow_null=True),
                     "change": serializers.DecimalField(max_digits=20, decimal_places=2, allow_null=True),
                     "status": serializers.CharField(),
                     "receipt": serializers.JSONField(allow_null=True),
@@ -119,6 +128,7 @@ class CheckoutView(APIView):
                 {"code": "checkout_failed", "detail": "Checkout could not be recorded."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+        payment_data = PaymentSerializer(payment).data
         return Response(
             {
                 "order_id": payment.order_id,
@@ -127,8 +137,13 @@ class CheckoutView(APIView):
                 "payment_method": data.get("payment_method", "qr"),
                 "amount_bif": payment.amount_bif,
                 "amount_sats": payment.amount_sats,
+                "settlement_currency": payment_data["settlement_currency"],
+                "settlement_amount": payment_data["settlement_amount"],
+                "exchange_rate": payment_data["exchange_rate"],
+                "rate_source": payment_data["rate_source"],
+                "rate_timestamp": payment_data["rate_timestamp"],
                 "status": payment.status,
-                "receipt": PaymentSerializer(payment).data["receipt"],
+                "receipt": payment_data["receipt"],
                 "change": (
                     str(payment.amount_tendered - payment.total_amount)
                     if payment.rail == "cash" and payment.amount_tendered is not None

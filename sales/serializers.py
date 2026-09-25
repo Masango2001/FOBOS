@@ -3,7 +3,7 @@ from decimal import Decimal
 
 from .models import Receipt, Sale, SaleLine
 
-from ledger.models import CURRENCIES
+from ledger.models import Currency
 
 
 class CheckoutSerializer(serializers.Serializer):
@@ -11,7 +11,7 @@ class CheckoutSerializer(serializers.Serializer):
 
     lines = serializers.ListField(child=serializers.DictField(), required=False, allow_empty=False)
     amount = serializers.DecimalField(max_digits=20, decimal_places=2, required=False)
-    currency = serializers.ChoiceField(choices=CURRENCIES, default="BIF")
+    currency = serializers.ChoiceField(choices=[Currency.BIF], default=Currency.BIF)
     payment_method = serializers.ChoiceField(
         choices=[("qr", "QR invoice"), ("lumicash_otp", "Lumicash OTP"), ("cash", "Cash")],
         default="qr",

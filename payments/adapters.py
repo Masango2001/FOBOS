@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 
 
 class AdapterNotInstalled(Exception):
-    """No adapter registered for the rail a settlement preference requires."""
+    """No payment adapter is registered for the requested rail."""
 
     def __init__(self, rail: str) -> None:
         super().__init__(f"No PaymentRailAdapter registered for rail '{rail}'")
@@ -27,6 +27,11 @@ class AdapterInvoice:
     payment_request: str
     amount_sats: int | None = None
     amount_bif: Decimal | None = None
+    settlement_currency: str | None = None
+    settlement_amount: Decimal | None = None
+    exchange_rate: Decimal | None = None
+    rate_source: str = ""
+    rate_timestamp: object | None = None
 
 
 @dataclass(frozen=True)
@@ -73,7 +78,7 @@ class PaymentRailAdapter(ABC):
 
 
 class OnrampAdapter(ABC):
-    """Lumicash-OTP on-ramp (Tech Spec §4/§8) — real BitLibera proxy belongs to Dev B."""
+    """Lumicash-OTP adapter; live requests are relayed through BitLibera."""
 
     rail: str
 
@@ -111,7 +116,5 @@ def get_onramp_adapter(rail: str) -> OnrampAdapter:
 
 
 def rails_by_settlement_preference(preference: str) -> str:
-    """Map Business.settlement_preference → rail (Tech Spec §3 step 1)."""
-    if preference == "bif_lumicash":
-        return "bitlibera_offramp"
+    """QR and subscription invoices are issued by Blink for either preference."""
     return "blink_direct"

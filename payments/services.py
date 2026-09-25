@@ -1,7 +1,7 @@
 """Checkout + payment confirmation services (Tech Spec §3 steps 1–2).
 
-- `create_checkout_payment` builds a pending Payment for a cart and asks the
-  adapter (interface only — real adapters belong to Backend Dev B) for an invoice.
+- `create_checkout_payment` freezes a cart and asks Blink for a Lightning invoice
+  or confirms cash immediately. Lumicash OTP uses the separate BitLibera adapter.
 - `create_subscription_payment` does the same for a SaaS subscription purchase
   (doc §41): the payment is frozen with `purpose=subscription` and an offer
   snapshot that the subscription layer activates from on confirmation.
@@ -57,6 +57,13 @@ def create_checkout_payment(
         raise CheckoutError(f"Unsupported currency '{currency}'.", code="bad_currency")
 
     snapshots, total = _resolve_cart(business, lines=lines, amount=amount)
+    if currency != "BIF":
+        raise CheckoutError(
+            "Catalog checkout totals are denominated in BIF. Blink converts that total "
+            "to the business's configured USD or BTC wallet."
+        )
+    if total != total.to_integral_value():
+        raise CheckoutError("BIF checkout totals must be whole-number amounts.")
     order_id = uuid.uuid4().hex
     if payment_method not in {"qr", "lumicash_otp", "cash"}:
         raise CheckoutError("Unsupported payment method.", code="bad_payment_method")
@@ -94,6 +101,11 @@ def create_checkout_payment(
         amount_sats=invoice.amount_sats if invoice else None,
         amount_tendered=amount_tendered,
         lumicash_phone=customer_phone if payment_method == "lumicash_otp" else "",
+        settlement_currency=(invoice.settlement_currency if invoice else "BIF") or "BIF",
+        settlement_amount=(invoice.settlement_amount if invoice else total),
+        exchange_rate=invoice.exchange_rate if invoice else None,
+        rate_source=invoice.rate_source if invoice else "",
+        rate_timestamp=invoice.rate_timestamp if invoice else None,
         purpose=Payment.Purpose.CHECKOUT,
         status=Payment.Status.PENDING,
     )
@@ -163,6 +175,12 @@ def create_subscription_payment(
         lines=snapshots,
         currency="BIF",
         amount_bif=int(amount),
+        amount_sats=invoice.amount_sats,
+        settlement_currency=(invoice.settlement_currency or "BIF"),
+        settlement_amount=invoice.settlement_amount,
+        exchange_rate=invoice.exchange_rate,
+        rate_source=invoice.rate_source,
+        rate_timestamp=invoice.rate_timestamp,
         purpose=Payment.Purpose.SUBSCRIPTION,
         status=Payment.Status.PENDING,
     )
@@ -244,6 +262,25 @@ def confirm_payment(
             return existing
 
         confirmed_at = confirmed_at or timezone.now()
+        event_metadata = metadata.copy() if metadata else {}
+        if payment.rate_source:
+            event_metadata.update(
+                {
+                    "rate_source": payment.rate_source,
+                    "rate_timestamp": (
+                        payment.rate_timestamp.isoformat() if payment.rate_timestamp else None
+                    ),
+                    "exchange_rate": (
+                        str(payment.exchange_rate) if payment.exchange_rate is not None else None
+                    ),
+                    "settlement_currency": payment.settlement_currency,
+                    "settlement_amount": (
+                        str(payment.settlement_amount)
+                        if payment.settlement_amount is not None
+                        else None
+                    ),
+                }
+            )
         event = FinancialEvent.objects.create(
             business=payment.business,
             type=FinancialEvent.EventType.PAYMENT_CONFIRMED,
@@ -254,7 +291,7 @@ def confirm_payment(
             status=FinancialEvent.Status.CONFIRMED,
             actor=actor,
             reference=order_id,
-            metadata=metadata or {},
+            metadata=event_metadata,
         )
         # Synchronous signal runs handle_financial_event inside this transaction.
         payment.financial_event = event

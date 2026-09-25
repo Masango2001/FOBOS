@@ -5,6 +5,33 @@ info:
   description: Backend Commerce & Ledger de la Financial Operations Platform — produits,
     stock, ledger, automations et paiements (MVP).
 paths:
+  /activate/:
+    post:
+      operationId: activate_create
+      description: Start a paid subscription purchase for the chosen offer (§41).
+      tags:
+      - activate
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OfferPurchase'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OfferPurchase'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OfferPurchase'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OfferPurchase'
+          description: ''
   /auth/business:
     get:
       operationId: auth_business_retrieve
@@ -283,8 +310,8 @@ paths:
   /auth/resend-verification:
     post:
       operationId: auth_resend_verification_create
-      description: Send a fresh signed link. Generic 200 response — never leaks whether
-        the email exists.
+      description: Legacy endpoint retained for clients that still request verification
+        emails.
       tags:
       - auth
       requestBody:
@@ -706,6 +733,99 @@ paths:
                 items:
                   $ref: '#/components/schemas/LedgerEntry'
           description: ''
+  /my/offers/:
+    get:
+      operationId: my_offers_list
+      description: Offers visible to the current business (all active offers today).
+      tags:
+      - my
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SubscriptionOffer'
+          description: ''
+  /my/offers/{id}/:
+    get:
+      operationId: my_offers_retrieve
+      description: Offers visible to the current business (all active offers today).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this subscription offer.
+        required: true
+      tags:
+      - my
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriptionOffer'
+          description: ''
+  /my/plan/:
+    get:
+      operationId: my_plan_retrieve
+      description: Current subscription of the authenticated business (§55–56).
+      tags:
+      - my
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MyPlan'
+          description: ''
+  /offers/:
+    get:
+      operationId: offers_list
+      tags:
+      - offers
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SubscriptionOffer'
+          description: ''
+  /offers/{id}/:
+    get:
+      operationId: offers_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this subscription offer.
+        required: true
+      tags:
+      - offers
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriptionOffer'
+          description: ''
   /payments/{order_id}/status:
     get:
       operationId: payments_status_retrieve
@@ -837,6 +957,88 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /payments/webhooks/blink:
+    post:
+      operationId: payments_webhooks_blink_create
+      description: |-
+        POST /payments/webhooks/blink — rail reports an order as paid.
+
+        Accepts both the canonical envelope (`{"order_id": "...", "status": ...}`)
+        and the flat form (`order_id` at top level). Failure/expiry are answered with
+        200 so the rail stops retrying; only a paid/confirmed/settled state calls
+        `confirm_payment`.
+      tags:
+      - payments
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BlinkWebhook'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BlinkWebhook'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BlinkWebhook'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BlinkWebhookAck'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BlinkWebhookBadRequest'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BlinkWebhookBadRequest'
+          description: ''
+  /plans/:
+    get:
+      operationId: plans_list
+      tags:
+      - plans
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Plan'
+          description: ''
+  /plans/{id}/:
+    get:
+      operationId: plans_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this plan.
+        required: true
+      tags:
+      - plans
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Plan'
+          description: ''
   /products:
     get:
       operationId: products_list
@@ -886,6 +1088,134 @@ paths:
               schema:
                 $ref: '#/components/schemas/Product'
           description: ''
+  /products/{id}:
+    get:
+      operationId: products_retrieve
+      description: |-
+        GET/PATCH/PUT/DELETE /products/:id — reads for any business user, writes owner-only.
+
+        Queryset is business-scoped, so a cross-business lookup returns 404 (same
+        isolation guarantee as the list). A FOBOS-generated barcode (prefixed "F.")
+        is regenerated on every write that does not supply a new barcode, so the
+        code always matches the latest name / price / product id.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - products
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+          description: ''
+    put:
+      operationId: products_update
+      description: |-
+        GET/PATCH/PUT/DELETE /products/:id — reads for any business user, writes owner-only.
+
+        Queryset is business-scoped, so a cross-business lookup returns 404 (same
+        isolation guarantee as the list). A FOBOS-generated barcode (prefixed "F.")
+        is regenerated on every write that does not supply a new barcode, so the
+        code always matches the latest name / price / product id.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - products
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Product'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Product'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Product'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+          description: ''
+    patch:
+      operationId: products_partial_update
+      description: |-
+        GET/PATCH/PUT/DELETE /products/:id — reads for any business user, writes owner-only.
+
+        Queryset is business-scoped, so a cross-business lookup returns 404 (same
+        isolation guarantee as the list). A FOBOS-generated barcode (prefixed "F.")
+        is regenerated on every write that does not supply a new barcode, so the
+        code always matches the latest name / price / product id.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - products
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedProduct'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedProduct'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedProduct'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+          description: ''
+    delete:
+      operationId: products_destroy
+      description: |-
+        GET/PATCH/PUT/DELETE /products/:id — reads for any business user, writes owner-only.
+
+        Queryset is business-scoped, so a cross-business lookup returns 404 (same
+        isolation guarantee as the list). A FOBOS-generated barcode (prefixed "F.")
+        is regenerated on every write that does not supply a new barcode, so the
+        code always matches the latest name / price / product id.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - products
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
   /products/scan/{barcode}:
     get:
       operationId: products_scan_retrieve
@@ -1066,6 +1396,47 @@ components:
       required:
       - created_at
       - id
+    BlinkWebhook:
+      type: object
+      description: |-
+        POST /payments/webhooks/blink — rail → FOBOS order confirmation (Tech Spec §27–28).
+
+        Accepts the canonical envelope (`order_id`) and the flat form (`orderId`).
+      properties:
+        order_id:
+          type: string
+          maxLength: 64
+        orderId:
+          type: string
+          maxLength: 64
+        status:
+          type: string
+          maxLength: 32
+        confirmed_at:
+          type: string
+          format: date-time
+          nullable: true
+    BlinkWebhookAck:
+      type: object
+      properties:
+        order_id:
+          type: string
+        status:
+          type: string
+        event_id:
+          type: string
+          format: uuid
+          nullable: true
+      required:
+      - order_id
+      - status
+    BlinkWebhookBadRequest:
+      type: object
+      properties:
+        detail:
+          type: string
+        code:
+          type: string
     Business:
       type: object
       properties:
@@ -1098,8 +1469,7 @@ components:
         Read + update (PUT/PATCH) of an owner's cashier — password optional on update.
 
         `role`, `business` and `email_verified` are read-only: an owner cannot promote a
-        cashier, move them to another business, or skip email verification. Changing the
-        email resets `email_verified` and sends a fresh verification link.
+        cashier, move them to another business, or change the verification metadata.
       properties:
         id:
           type: string
@@ -1140,8 +1510,7 @@ components:
       - role
     CashierCreate:
       type: object
-      description: Owner creates a cashier for their business — email verified before
-        first login.
+      description: Owner creates a cashier who can use their account immediately.
       properties:
         id:
           type: string
@@ -1213,13 +1582,8 @@ components:
     CheckoutCurrencyEnum:
       enum:
       - BIF
-      - USD
-      - SAT
       type: string
-      description: |-
-        * `BIF` - BIF
-        * `USD` - USD
-        * `SAT` - SAT
+      description: '* `BIF` - BIF'
     CheckoutPaymentMethodEnum:
       enum:
       - qr
@@ -1247,6 +1611,24 @@ components:
         amount_sats:
           type: integer
           nullable: true
+        settlement_currency:
+          type: string
+        settlement_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,8})?$
+          nullable: true
+        exchange_rate:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,12})?$
+          nullable: true
+        rate_source:
+          type: string
+        rate_timestamp:
+          type: string
+          format: date-time
+          nullable: true
         change:
           type: string
           format: decimal
@@ -1260,11 +1642,16 @@ components:
       - amount_bif
       - amount_sats
       - change
+      - exchange_rate
       - order_id
       - payment_method
       - payment_request
       - rail
+      - rate_source
+      - rate_timestamp
       - receipt
+      - settlement_amount
+      - settlement_currency
       - status
     CheckoutResponsePaymentMethodEnum:
       enum:
@@ -1276,16 +1663,6 @@ components:
         * `qr` - qr
         * `lumicash_otp` - lumicash_otp
         * `cash` - cash
-    Currency45aEnum:
-      enum:
-      - BIF
-      - USD
-      - SAT
-      type: string
-      description: |-
-        * `BIF` - Burundian Franc
-        * `USD` - US Dollar
-        * `SAT` - Sats
     DashboardAlert:
       type: object
       properties:
@@ -1373,8 +1750,7 @@ components:
       - stock_threshold
     FobosTokenObtainPair:
       type: object
-      description: JWT pair that refuses unverified emails and embeds the role claim
-        (§4).
+      description: JWT pair that embeds the user's role claim (§4).
       properties:
         email:
           type: string
@@ -1449,7 +1825,7 @@ components:
           format: decimal
           pattern: ^-?\d{0,18}(?:\.\d{0,2})?$
         currency:
-          $ref: '#/components/schemas/Currency45aEnum'
+          $ref: '#/components/schemas/SettlementCurrencyEnum'
         financial_event_id:
           type: string
           format: uuid
@@ -1473,6 +1849,70 @@ components:
       description: |-
         * `credit` - Credit
         * `debit` - Debit
+    MyPlan:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        plan:
+          allOf:
+          - $ref: '#/components/schemas/Plan'
+          readOnly: true
+        offer:
+          allOf:
+          - $ref: '#/components/schemas/SubscriptionOffer'
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/MyPlanStatusEnum'
+          readOnly: true
+        started_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        expires_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        features:
+          type: array
+          items:
+            type: string
+          readOnly: true
+      required:
+      - expires_at
+      - features
+      - id
+      - offer
+      - plan
+      - started_at
+      - status
+    MyPlanStatusEnum:
+      enum:
+      - trial
+      - active
+      - expired
+      - cancelled
+      type: string
+      description: |-
+        * `trial` - trial
+        * `active` - active
+        * `expired` - expired
+        * `cancelled` - cancelled
+    OfferPurchase:
+      type: object
+      description: POST /activate — the frontend only ever sends the offer id (§41,
+        §55).
+      properties:
+        offer_id:
+          type: string
+          format: uuid
+      required:
+      - offer_id
     OnrampConfirm:
       type: object
       description: POST /payments/onramp/confirm — executes the OTP against an order
@@ -1535,8 +1975,7 @@ components:
         Read + update (PUT/PATCH) of an owner's cashier — password optional on update.
 
         `role`, `business` and `email_verified` are read-only: an owner cannot promote a
-        cashier, move them to another business, or skip email verification. Changing the
-        email resets `email_verified` and sends a fresh verification link.
+        cashier, move them to another business, or change the verification metadata.
       properties:
         id:
           type: string
@@ -1568,13 +2007,60 @@ components:
           type: string
           writeOnly: true
           minLength: 8
+    PatchedProduct:
+      type: object
+      description: barcode_image = absolute URL of the persisted Code128 PNG (local
+        media volume).
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          maxLength: 200
+        category:
+          type: string
+          maxLength: 100
+        unit:
+          type: string
+          maxLength: 20
+        barcode:
+          type: string
+          nullable: true
+          description: Manufacturer barcode, or FOBOS-generated internal-use EAN-13.
+          maxLength: 128
+        barcode_image_url:
+          type: string
+          nullable: true
+          readOnly: true
+        unit_cost:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,18}(?:\.\d{0,2})?$
+        unit_price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,18}(?:\.\d{0,2})?$
+        stock_qty:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        stock_threshold:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
     Payment:
       type: object
       properties:
         order_id:
           type: string
           readOnly: true
-          description: BitLibera reference — idempotency key.
+          description: Unique checkout reference and idempotency key.
         payment_request:
           type: string
           readOnly: true
@@ -1586,12 +2072,61 @@ components:
           type: integer
           readOnly: true
           nullable: true
+        currency:
+          allOf:
+          - $ref: '#/components/schemas/SettlementCurrencyEnum'
+          readOnly: true
+        settlement_currency:
+          allOf:
+          - $ref: '#/components/schemas/SettlementCurrencyEnum'
+          readOnly: true
+          description: |-
+            Currency FOBOS expects to receive (doc §46).
+
+            * `BIF` - Burundian Franc
+            * `USD` - US Dollar
+            * `SAT` - Sats
+        settlement_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,8})?$
+          readOnly: true
+          nullable: true
+          description: Quoted amount in settlement_currency when the invoice was created.
+        exchange_rate:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,12})?$
+          readOnly: true
+          nullable: true
+          description: Settlement currency units per one unit of the checkout currency.
+        rate_source:
+          type: string
+          readOnly: true
+        rate_timestamp:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        purpose:
+          allOf:
+          - $ref: '#/components/schemas/PurposeEnum'
+          readOnly: true
+          description: |-
+            What the Payment pays for: checkout or subscription (doc §41).
+
+            * `checkout` - Cart checkout
+            * `subscription` - SaaS subscription
+        rail:
+          allOf:
+          - $ref: '#/components/schemas/RailEnum'
+          readOnly: true
         lumicash_phone:
           type: string
           readOnly: true
         status:
           allOf:
-          - $ref: '#/components/schemas/StatusEnum'
+          - $ref: '#/components/schemas/PaymentStatusEnum'
           readOnly: true
         confirmed_at:
           type: string
@@ -1606,11 +2141,62 @@ components:
       - amount_bif
       - amount_sats
       - confirmed_at
+      - currency
+      - exchange_rate
       - lumicash_phone
       - order_id
       - payment_request
+      - purpose
+      - rail
+      - rate_source
+      - rate_timestamp
       - receipt
+      - settlement_amount
+      - settlement_currency
       - status
+    PaymentStatusEnum:
+      enum:
+      - created
+      - pending
+      - paid
+      - failed
+      - expired
+      - cancelled
+      type: string
+      description: |-
+        * `created` - created
+        * `pending` - pending
+        * `paid` - paid
+        * `failed` - failed
+        * `expired` - expired
+        * `cancelled` - cancelled
+    Plan:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        unit_price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,18}(?:\.\d{0,2})?$
+          readOnly: true
+        description:
+          type: string
+          readOnly: true
+        is_active:
+          type: boolean
+          readOnly: true
+      required:
+      - description
+      - id
+      - is_active
+      - name
+      - unit_price
     Product:
       type: object
       description: barcode_image = absolute URL of the persisted Code128 PNG (local
@@ -1664,6 +2250,26 @@ components:
       - id
       - name
       - unit_price
+    PurposeEnum:
+      enum:
+      - checkout
+      - subscription
+      type: string
+      description: |-
+        * `checkout` - Cart checkout
+        * `subscription` - SaaS subscription
+    RailEnum:
+      enum:
+      - bitlibera_offramp
+      - bitlibera_onramp
+      - blink_direct
+      - cash
+      type: string
+      description: |-
+        * `bitlibera_offramp` - BitLibera off-ramp
+        * `bitlibera_onramp` - BitLibera on-ramp
+        * `blink_direct` - Blink direct
+        * `cash` - Cash
     Receipt:
       type: object
       properties:
@@ -1764,7 +2370,7 @@ components:
           format: double
           readOnly: true
         currency:
-          $ref: '#/components/schemas/Currency45aEnum'
+          $ref: '#/components/schemas/SettlementCurrencyEnum'
         payment_rail:
           type: string
           readOnly: true
@@ -1839,6 +2445,16 @@ components:
       - quantity
       - unit_cost
       - unit_price
+    SettlementCurrencyEnum:
+      enum:
+      - BIF
+      - USD
+      - SAT
+      type: string
+      description: |-
+        * `BIF` - Burundian Franc
+        * `USD` - US Dollar
+        * `SAT` - Sats
     SettlementPreferenceEnum:
       enum:
       - as_is
@@ -1892,18 +2508,6 @@ components:
       - email
       - owner_name
       - password
-    StatusEnum:
-      enum:
-      - pending
-      - confirmed
-      - failed
-      - expired
-      type: string
-      description: |-
-        * `pending` - pending
-        * `confirmed` - confirmed
-        * `failed` - failed
-        * `expired` - expired
     StockAdjustment:
       type: object
       description: POST /inventory/adjustments body (LOT 1).
@@ -2016,6 +2620,38 @@ components:
       - product_id
       - quantity
       - reason
+    SubscriptionOffer:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        plan:
+          allOf:
+          - $ref: '#/components/schemas/Plan'
+          readOnly: true
+        duration_months:
+          type: integer
+          readOnly: true
+        discount_rate:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,1}(?:\.\d{0,4})?$
+          readOnly: true
+        final_price:
+          type: string
+          readOnly: true
+        is_active:
+          type: boolean
+          readOnly: true
+      required:
+      - discount_rate
+      - duration_months
+      - final_price
+      - id
+      - is_active
+      - plan
     TokenRefresh:
       type: object
       properties:

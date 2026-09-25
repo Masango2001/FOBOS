@@ -164,6 +164,9 @@ BLINK_WSS_URL = os.getenv("BLINK_WSS_URL") or "wss://ws.blink.sv/graphql"
 BITLIBERA_BASE_URL = os.getenv("BITLIBERA_BASE_URL") or ""
 BITLIBERA_MERCHANT_ID = os.getenv("BITLIBERA_MERCHANT_ID") or ""
 BITLIBERA_API_KEY = os.getenv("BITLIBERA_API_KEY") or ""
+YADIO_API_URL = os.getenv("YADIO_API_URL") or "https://api.yadio.io"
+YADIO_RATE_CACHE_SECONDS = int(os.getenv("YADIO_RATE_CACHE_SECONDS") or "15")
+YADIO_RATE_MAX_AGE_SECONDS = int(os.getenv("YADIO_RATE_MAX_AGE_SECONDS") or "300")
 
 # Fixed company Lumicash number (doc §24/§47) — used as the settlement or
 # debit-side recipient when the provider contract requires it. Per-customer

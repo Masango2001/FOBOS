@@ -1,8 +1,6 @@
 """Payment views — GET /payments/<id>/status + Lumicash OTP on-ramp (Tech Spec §4).
 
-Status polls the rail adapter through the PaymentRailAdapter interface (§5). Built
-against the interface only — real BitLibera/Blink adapters belong to Backend Dev B
-and register into the same registry. Once the rail reports the order as paid,
+Status polls Blink through the PaymentRailAdapter interface (§5). Once the rail reports the order as paid,
 confirmation goes through `confirm_payment` (idempotent on order_id).
 
 The on-ramp endpoints proxy a Lumicash-OTP adapter (`OnrampAdapter`): request-otp

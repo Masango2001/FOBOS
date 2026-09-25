@@ -1,16 +1,17 @@
-"""HTTP adapters for BitLibera and Blink. Credentials and endpoints are server-only."""
+"""Live payment adapters: Blink invoices and BitLibera Lumicash OTP only."""
 
 from __future__ import annotations
 
-import json
 import os
-from datetime import datetime
 from decimal import Decimal, ROUND_HALF_UP
-from urllib.error import HTTPError, URLError
-from urllib.parse import quote
-from urllib.request import Request, urlopen
 
-from django.utils import timezone
+from integrations.bitlibera.client import BitLiberaClient
+from integrations.bitlibera.exceptions import BitLiberaAPIError, BitLiberaError, BitLiberaOrderError
+from integrations.bitlibera.services import BitLiberaService
+from integrations.blink.client import BlinkClient
+from integrations.blink.exceptions import BlinkError
+from integrations.blink.services import BlinkService
+from integrations.yadio import YadioError, get_yadio_rates
 
 from .adapters import (
     AdapterInvoice,
@@ -26,247 +27,149 @@ class ProviderError(RuntimeError):
     """A payment provider returned an unusable response."""
 
 
-def _request_json(url: str, *, payload=None, headers=None):
-    body = json.dumps(payload).encode() if payload is not None else None
-    request = Request(url, data=body, headers={"Accept": "application/json", **(headers or {})})
-    try:
-        with urlopen(request, timeout=20) as response:
-            result = json.loads(response.read().decode())
-    except (HTTPError, URLError, TimeoutError, ValueError) as exc:
-        raise ProviderError("Payment provider request failed.") from exc
-    if not isinstance(result, dict):
-        raise ProviderError("Payment provider returned an invalid response.")
-    return result
-
-
-def _bitlibera_headers(business):
-    key = business.bitlibera_api_key or os.getenv("BITLIBERA_API_KEY", "")
-    if not key:
-        raise ProviderError("BitLibera credentials are not configured.")
-    return {"Content-Type": "application/json", "x-api-key": key}
-
-
-def _provider_data(result):
-    if result.get("success") is False or result.get("error"):
-        raise ProviderError("Payment provider rejected the request.")
-    return result.get("data", result.get("result", result))
-
-
-def _bif_amount(amount: Decimal) -> int:
-    """BitLibera's documented amount_bif field is a whole-number BIF amount."""
-    amount = Decimal(amount)
-    if amount != amount.to_integral_value():
-        raise ProviderError("BitLibera accepts whole-number BIF amounts only.")
-    return int(amount)
-
-
-class BitLiberaOfframpAdapter(PaymentRailAdapter):
-    rail = "bitlibera_offramp"
-
-    def create_invoice(self, *, amount: Decimal, currency: str, business, order_id: str):
-        if currency != "BIF":
-            raise ProviderError("BitLibera off-ramp checkout currently supports BIF only.")
-        base = os.getenv("BITLIBERA_API_URL", "https://exchanger.bitlibera.com/api/v1").rstrip("/")
-        data = _provider_data(
-            _request_json(
-                f"{base}/offramp/create-invoice",
-                payload={
-                    "recipient_phone": business.lumicash_number,
-                    "amount_bif": _bif_amount(amount),
-                    "order_id": order_id,
-                },
-                headers=_bitlibera_headers(business),
-            )
-        )
-        invoice = data.get("payment_request") or data.get("invoice") or data.get("bolt11")
-        if not invoice:
-            raise ProviderError("BitLibera did not return a Lightning invoice.")
-        sats = data.get("amount_sats") or data.get("sats")
-        return AdapterInvoice(order_id, invoice, int(sats) if sats is not None else None, amount)
-
-    def get_status(self, order_id: str):
-        base = os.getenv("BITLIBERA_API_URL", "https://exchanger.bitlibera.com/api/v1").rstrip("/")
-        # Payment stores the business-scoped API key; resolve only this order's tenant.
-        from .models import Payment
-
-        payment = Payment.objects.select_related("business").get(order_id=order_id)
-        data = _provider_data(
-            _request_json(
-                f"{base}/orders/{quote(order_id, safe='')}",
-                headers=_bitlibera_headers(payment.business),
-            )
-        )
-        raw = str(data.get("status", "pending")).lower()
-        state = (
-            "confirmed" if raw in {"confirmed", "paid", "success", "completed", "settled"} else raw
-        )
-        confirmed_at = data.get("confirmed_at")
-        if isinstance(confirmed_at, str):
-            try:
-                confirmed_at = datetime.fromisoformat(confirmed_at.replace("Z", "+00:00"))
-            except ValueError:
-                confirmed_at = timezone.now() if state == "confirmed" else None
-        return AdapterStatus(state, confirmed_at=confirmed_at)
-
-
 class BitLiberaOnrampAdapter(OnrampAdapter):
+    """BitLibera handles only the customer Lumicash OTP debit flow."""
+
     rail = "bitlibera_onramp"
 
+    def __init__(self, service: BitLiberaService | None = None):
+        self.service = service
+
+    def _service(self) -> BitLiberaService:
+        if self.service is None:
+            self.service = BitLiberaService(BitLiberaClient())
+        return self.service
+
+    @staticmethod
+    def _bif_amount(amount: Decimal) -> int:
+        amount = Decimal(amount)
+        if amount != amount.to_integral_value():
+            raise ProviderError("BitLibera Lumicash OTP requires a whole-number BIF amount.")
+        return int(amount)
+
     def request_otp(self, *, customer_phone: str, amount: Decimal, business=None, order_id=""):
-        base = os.getenv("BITLIBERA_API_URL", "https://exchanger.bitlibera.com/api/v1").rstrip("/")
-        data = _provider_data(
-            _request_json(
-                f"{base}/onramp/request-otp",
-                payload={
-                    "phone": customer_phone,
-                    "amount": _bif_amount(amount),
-                    "order_id": order_id,
-                },
-                headers=_bitlibera_headers(business),
+        try:
+            result = self._service().request_onramp_otp(
+                customer_phone, self._bif_amount(amount)
             )
-        )
-        return AdapterOtpSent(status=str(data.get("status", "otp_sent")))
+        except BitLiberaError as exc:
+            raise ProviderError("BitLibera could not send the Lumicash OTP.") from exc
+        status = str(result.get("status") or result.get("otp_status") or "otp_sent").lower()
+        if status in {"failed", "rejected", "error"}:
+            raise ProviderError("BitLibera rejected the Lumicash OTP request.")
+        return AdapterOtpSent(status=status)
 
     def confirm_otp(
         self, *, customer_phone: str, amount: Decimal, otp: str, business=None, order_id=""
-    ):
-        base = os.getenv("BITLIBERA_API_URL", "https://exchanger.bitlibera.com/api/v1").rstrip("/")
+    ) -> None:
         try:
-            data = _provider_data(
-                _request_json(
-                    f"{base}/onramp/confirm-otp",
-                    payload={
-                        "phone": customer_phone,
-                        "amount": _bif_amount(amount),
-                        "otp": otp,
-                        "order_id": order_id,
-                    },
-                    headers=_bitlibera_headers(business),
-                )
+            result = self._service().execute_onramp(
+                customer_phone,
+                self._bif_amount(amount),
+                otp,
+                order_id,
             )
-        except ProviderError as exc:
-            raise OnrampOtpError("BitLibera could not validate the Lumicash OTP.") from exc
-        if data.get("status") and str(data["status"]).lower() in {"failed", "rejected", "error"}:
-            raise OnrampOtpError("BitLibera could not validate the Lumicash OTP.")
+        except BitLiberaOrderError as exc:
+            raise OnrampOtpError("BitLibera rejected the Lumicash OTP.") from exc
+        except BitLiberaAPIError as exc:
+            if exc.status_code == 400:
+                raise OnrampOtpError("BitLibera rejected the Lumicash OTP.") from exc
+            raise ProviderError("BitLibera could not confirm the Lumicash payment.") from exc
+        except BitLiberaError as exc:
+            raise ProviderError("BitLibera could not confirm the Lumicash payment.") from exc
+
+        status = str(result.get("status") or "").lower()
+        if status in {"failed", "rejected", "error"}:
+            raise OnrampOtpError("BitLibera rejected the Lumicash OTP.")
 
 
 class BlinkDirectAdapter(PaymentRailAdapter):
+    """Create a USD or BTC-wallet Lightning invoice for a BIF-priced checkout."""
+
     rail = "blink_direct"
 
-    def __init__(self):
-        self.endpoint = os.getenv("BLINK_API_URL", "https://api.blink.sv/graphql")
+    def __init__(self, blink: BlinkService | None = None):
+        self.blink = blink
 
-    def _graphql(self, query, variables):
-        data = _request_json(
-            self.endpoint,
-            payload={"query": query, "variables": variables},
-            headers={"Content-Type": "application/json"},
-        )
-        if data.get("errors"):
-            raise ProviderError("Blink rejected the GraphQL request.")
-        return data.get("data") or {}
+    def _blink(self) -> BlinkService:
+        if self.blink is None:
+            client = BlinkClient(
+                url=os.getenv("BLINK_API_URL") or "https://api.blink.sv/graphql",
+                api_key=os.getenv("BLINK_API_KEY") or None,
+            )
+            self.blink = BlinkService(client=client)
+        return self.blink
 
     def create_invoice(self, *, amount: Decimal, currency: str, business, order_id: str):
-        # Blink does not publish a BIF price in the supplied currency contract.
-        # Do not create an invoice with a guessed or stale BIF→sats conversion.
-        if currency == "BIF":
-            raise ProviderError(
-                "Blink settlement for BIF-priced sales needs a documented BIF-to-sats quote. "
-                "Choose BIF/Lumicash settlement or price this sale in USD/sats."
-            )
+        if currency != "BIF":
+            raise ProviderError("QR checkout is priced in BIF; Blink settles to the configured USD or BTC wallet.")
 
-        wallet = (
-            self._graphql(
-                "query AccountDefaultWallet($username: Username!) { accountDefaultWallet(username: $username) { id currency } }",
-                {"username": business.blink_username},
-            ).get("accountDefaultWallet")
-            or {}
-        )
-        wallet_id = wallet.get("id")
-        wallet_currency = str(wallet.get("currency", "")).upper()
-        if not wallet_id:
-            raise ProviderError("Blink merchant wallet was not found.")
-
-        # A USD wallet receives a USD-denominated invoice. Blink expects cents.
-        if wallet_currency == "USD":
-            if currency != "USD":
-                raise ProviderError("USD Blink wallets currently require USD-priced sales.")
-            cents = int((amount * Decimal("100")).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
-            invoice_result = (
-                self._graphql(
-                    "mutation CreateUsdInvoice($input: LnUsdInvoiceCreateOnBehalfOfRecipientInput!) { lnUsdInvoiceCreateOnBehalfOfRecipient(input: $input) { invoice { paymentRequest satoshis } } }",
-                    {
-                        "input": {
-                            "recipientWalletId": wallet_id,
-                            "amount": cents,
-                            "memo": f"FOBOS {order_id}",
-                            "expiresIn": "15",
-                        }
-                    },
-                ).get("lnUsdInvoiceCreateOnBehalfOfRecipient")
-                or {}
+        try:
+            blink = self._blink()
+            wallet = blink.default_wallet(
+                username=business.blink_username or None,
+                wallet_currency="",
             )
-            invoice = invoice_result.get("invoice") or {}
-            if not invoice.get("paymentRequest"):
-                raise ProviderError("Blink did not return a USD invoice.")
-            return AdapterInvoice(
-                order_id, invoice["paymentRequest"], int(invoice.get("satoshis") or 0), amount
-            )
+            wallet_id = wallet.get("id")
+            wallet_currency = str(wallet.get("walletCurrency") or wallet.get("currency") or "").upper()
+            if not wallet_id:
+                raise ProviderError("Blink did not return a receiving wallet for this business.")
 
-        if wallet_currency not in {"BTC", "SAT", "SATS"}:
-            raise ProviderError(f"Unsupported Blink receiving wallet currency '{wallet_currency}'.")
-
-        if currency in {"SAT", "SATS"}:
-            sats = int(amount.to_integral_value(rounding=ROUND_HALF_UP))
-        else:
-            # Blink's exchange quote supports USD, but not BIF (rejected above).
-            quote_currency = "USD" if currency == "USD" else currency
-            quote_data = (
-                self._graphql(
-                    "query RealtimePrice($currency: DisplayCurrency!) { realtimePrice(currency: $currency) { btcSatPrice { base offset } } }",
-                    {"currency": quote_currency},
-                ).get("realtimePrice")
-                or {}
-            )
-            price = quote_data.get("btcSatPrice") or {}
-            if price.get("base") is None or price.get("offset") is None:
-                raise ProviderError("Blink could not quote this checkout currency.")
-            sats = int(
-                (amount * Decimal(str(price["base"])) * (Decimal(10) ** int(price["offset"]))).quantize(
-                    Decimal("1"), rounding=ROUND_HALF_UP
+            rates = get_yadio_rates()
+            if wallet_currency == "USD":
+                usd_amount = rates.fiat_amount(amount, source="BIF", target="USD")
+                cents = int((usd_amount * Decimal("100")).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+                if cents < 1:
+                    raise ProviderError("The checkout total is below Blink's minimum USD invoice amount.")
+                invoice = blink.create_invoice_usd_cents(
+                    cents,
+                    wallet_id=wallet_id,
+                    memo=f"FOBOS {order_id}",
                 )
-            )
-        invoice_result = (
-            self._graphql(
-                "mutation CreateInvoice($input: LnInvoiceCreateOnBehalfOfRecipientInput!) { lnInvoiceCreateOnBehalfOfRecipient(input: $input) { invoice { paymentRequest satoshis } } }",
-                {
-                    "input": {
-                        "recipientWalletId": wallet_id,
-                        "amount": str(sats),
-                        "memo": f"FOBOS {order_id}",
-                        "expiresIn": "15",
-                    }
-                },
-            ).get("lnInvoiceCreateOnBehalfOfRecipient")
-            or {}
-        )
-        invoice = invoice_result.get("invoice") or {}
-        if not invoice.get("paymentRequest"):
+                settlement_currency = "USD"
+                settlement_amount = usd_amount
+            elif wallet_currency == "BTC":
+                sats = rates.sats_for_fiat(amount, currency="BIF")
+                if sats < 1:
+                    raise ProviderError("The checkout total is below Blink's minimum invoice amount.")
+                invoice = blink.create_invoice_btc(
+                    sats,
+                    wallet_id=wallet_id,
+                    memo=f"FOBOS {order_id}",
+                    expires_in_minutes=15,
+                )
+                settlement_currency = "SAT"
+                settlement_amount = Decimal(sats)
+            else:
+                raise ProviderError(
+                    f"Blink returned unsupported receiving wallet currency '{wallet_currency}'."
+                )
+        except (BlinkError, YadioError) as exc:
+            raise ProviderError(str(exc)) from exc
+
+        if not invoice.payment_request:
             raise ProviderError("Blink did not return a Lightning invoice.")
+        if invoice.amount_sats is None or invoice.amount_sats <= 0:
+            raise ProviderError("Blink did not return a valid satoshi amount for the invoice.")
+
         return AdapterInvoice(
-            order_id, invoice["paymentRequest"], int(invoice.get("satoshis", sats)), amount
+            order_id=order_id,
+            payment_request=invoice.payment_request,
+            amount_sats=int(invoice.amount_sats),
+            amount_bif=amount,
+            settlement_currency=settlement_currency,
+            settlement_amount=settlement_amount,
+            exchange_rate=(settlement_amount / amount).quantize(Decimal("0.000000000001")),
+            rate_source="Yadio.io",
+            rate_timestamp=rates.quoted_at,
         )
 
     def get_status(self, order_id: str):
         from .models import Payment
 
         payment = Payment.objects.get(order_id=order_id)
-        result = (
-            self._graphql(
-                "query PaymentStatus($input: LnInvoicePaymentStatusInput!) { lnInvoicePaymentStatus(input: $input) { status } }",
-                {"input": {"paymentRequest": payment.payment_request}},
-            ).get("lnInvoicePaymentStatus")
-            or {}
-        )
-        raw = str(result.get("status", "pending")).lower()
-        return AdapterStatus("confirmed" if raw in {"paid", "success", "confirmed"} else raw)
+        try:
+            status = self._blink().invoice_status(payment.payment_request)
+        except BlinkError as exc:
+            raise ProviderError("Blink could not retrieve the invoice status.") from exc
+        return AdapterStatus("confirmed" if status in {"paid", "success", "confirmed"} else status)

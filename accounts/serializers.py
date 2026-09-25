@@ -77,6 +77,10 @@ class SignupSerializer(serializers.Serializer):
             raise serializers.ValidationError(
                 {"blink_username": "Required when settlement_preference is as_is."}
             )
+        if not attrs.get("blink_username", "").strip():
+            raise serializers.ValidationError(
+                {"blink_username": "A Blink username is required to receive QR payments."}
+            )
         return attrs
 
     def create(self, validated_data: dict) -> User:

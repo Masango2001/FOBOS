@@ -22,8 +22,17 @@ forwarded HTTPS header is trusted so absolute media URLs use HTTPS on phones.
 
 The temporary staging Blueprint enables simulated payment adapters so QR and
 Lumicash OTP flows can be demonstrated without moving real money. Live adapters
-remain disabled. Before production, set `FOBOS_USE_DEMO_ADAPTERS=false`, review
-provider readiness, and configure provider secrets only in the API service.
+remain disabled. QR invoices use the business's Blink USD or BTC wallet; Yadio
+quotes BIF totals into that wallet currency. BitLibera is used only for the
+customer Lumicash OTP flow, while cash is settled locally in BIF.
+
+To enable live provider calls, configure `BLINK_API_KEY` with Blink `Read` and
+`Receive` scopes and set `BLINK_API_URL` to `https://api.blink.sv/graphql`.
+Configure `BITLIBERA_API_KEY` for Lumicash OTP; `BITLIBERA_BASE_URL` defaults to
+`https://exchanger.bitlibera.com`. Then set `FOBOS_USE_DEMO_ADAPTERS=false` and
+`FOBOS_USE_LIVE_ADAPTERS=true`. Yadio quotes come from `https://api.yadio.io`;
+checkout fails closed when the quote is unavailable or stale. Keep provider
+credentials in the API service environment, never in Vercel.
 
 ## Frontend
 

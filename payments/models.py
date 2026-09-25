@@ -45,7 +45,7 @@ class Payment(models.Model):
     )
     rail = models.CharField(max_length=32, choices=Rail.choices)
     order_id = models.CharField(
-        max_length=64, unique=True, help_text="BitLibera reference — idempotency key."
+        max_length=64, unique=True, help_text="Unique checkout reference and idempotency key."
     )
     payment_request = models.TextField(blank=True, default="")
     amount_sats = models.BigIntegerField(null=True, blank=True)
@@ -64,6 +64,22 @@ class Payment(models.Model):
         default=Currency.BIF,
         help_text="Currency FOBOS expects to receive (doc §46).",
     )
+    settlement_amount = models.DecimalField(
+        max_digits=24,
+        decimal_places=8,
+        null=True,
+        blank=True,
+        help_text="Quoted amount in settlement_currency when the invoice was created.",
+    )
+    exchange_rate = models.DecimalField(
+        max_digits=24,
+        decimal_places=12,
+        null=True,
+        blank=True,
+        help_text="Settlement currency units per one unit of the checkout currency.",
+    )
+    rate_source = models.CharField(max_length=64, blank=True, default="")
+    rate_timestamp = models.DateTimeField(null=True, blank=True)
     purpose = models.CharField(
         max_length=16,
         choices=Purpose.choices,
