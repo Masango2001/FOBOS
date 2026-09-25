@@ -12,6 +12,7 @@ urlpatterns: list[URLPattern | URLResolver] = [
     path("", include("ledger.urls")),
     path("", include("automation.urls")),
     path("", include("payments.urls")),
+    path("", include("subscriptions.urls")),
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path(
         "api/docs/",

@@ -5,6 +5,7 @@ from .views import (
     OnrampRequestOtpView,
     PaymentStatusView,
 )
+from .webhooks import BlinkWebhookView
 
 urlpatterns = [
     path("payments/<uuid:pk>/status", PaymentStatusView.as_view(), name="payment-status"),
@@ -18,4 +19,5 @@ urlpatterns = [
         OnrampConfirmView.as_view(),
         name="onramp-confirm",
     ),
+    path("payments/webhooks/blink", BlinkWebhookView.as_view(), name="blink-webhook"),
 ]
