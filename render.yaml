@@ -59,3 +59,5 @@ services:
         value: django.core.mail.backends.console.EmailBackend
       - key: CORS_ALLOWED_ORIGINS
         value: https://fobos-pos.vercel.app
+      - key: CORS_ALLOW_ALL_ORIGINS
+        value: "true"

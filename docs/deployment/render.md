@@ -29,8 +29,10 @@ provider readiness, and configure provider secrets only in the API service.
 
 The Vercel project builds the Vite app with `VITE_DEMO_MODE=false` and
 `VITE_API_BASE_URL` set to the Render API URL. After creating the API service,
-set this value in Vercel for Production and Preview, then redeploy. The backend
-Blueprint allows the production frontend origin in `CORS_ALLOWED_ORIGINS`.
+set this value in Vercel for Production and Preview, then redeploy. The staging
+backend Blueprint allows all browser origins with `CORS_ALLOW_ALL_ORIGINS`.
+This lets tools such as Google AI Studio call the API from their browser origin.
+The API uses bearer tokens and does not enable credentialed cross-origin cookies.
 
 ## OpenAPI contract
 

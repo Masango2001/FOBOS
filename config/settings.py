@@ -170,6 +170,7 @@ CORS_ALLOWED_ORIGINS = [
     for origin in (os.getenv("CORS_ALLOWED_ORIGINS") or "").split(",")
     if origin.strip()
 ]
+CORS_ALLOW_ALL_ORIGINS = (os.getenv("CORS_ALLOW_ALL_ORIGINS") or "false").lower() == "true"
 
 # Local file storage (Docker named volume `media`, mounted at /app/media).
 # Product barcode images are persisted here — swap MEDIA_ROOT/DEFAULT_FILE_STORAGE
