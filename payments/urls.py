@@ -8,7 +8,7 @@ from .views import (
 from .webhooks import BlinkWebhookView
 
 urlpatterns = [
-    path("payments/<uuid:pk>/status", PaymentStatusView.as_view(), name="payment-status"),
+    path("payments/<str:order_id>/status", PaymentStatusView.as_view(), name="payment-status"),
     path(
         "payments/onramp/request-otp",
         OnrampRequestOtpView.as_view(),

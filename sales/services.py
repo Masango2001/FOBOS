@@ -119,6 +119,29 @@ def handle_financial_event(event: FinancialEvent) -> Sale | None:
             amount=sale.total_amount,
             currency=sale.currency,
         )
+        settlement_account = {
+            "cash": "CASH",
+            "bitlibera_onramp": "MOBILE_MONEY",
+            # BitLibera's off-ramp converts the Lightning payment and settles
+            # BIF to the merchant's configured Lumicash destination.
+            "bitlibera_offramp": "MOBILE_MONEY",
+        }.get(payment.rail, "PAYMENT_CLEARING")
+        LedgerEntry.objects.create(
+            business=event.business,
+            financial_event=event,
+            type=LedgerEntry.MovementType.DEBIT,
+            account=settlement_account,
+            amount=sale.total_amount,
+            currency=sale.currency,
+        )
+        LedgerEntry.objects.create(
+            business=event.business,
+            financial_event=event,
+            type=LedgerEntry.MovementType.CREDIT,
+            account="INVENTORY",
+            amount=total_cogs,
+            currency=sale.currency,
+        )
         LedgerEntry.objects.create(
             business=event.business,
             financial_event=event,

@@ -42,10 +42,15 @@ class BitLiberaClient:
         timeout: float = DEFAULT_TIMEOUT_SECONDS,
         session: Any = None,
     ) -> None:
-        base = base_url or os.getenv("BITLIBERA_BASE_URL") or ""
-        if not base:
-            raise BitLiberaConfigError("BITLIBERA_BASE_URL is not configured.")
+        base = (
+            base_url
+            or os.getenv("BITLIBERA_BASE_URL")
+            or os.getenv("BITLIBERA_API_URL")
+            or "https://exchanger.bitlibera.com"
+        )
         self.base_url = base.rstrip("/")
+        if self.base_url.endswith("/api/v1"):
+            self.base_url = self.base_url[: -len("/api/v1")]
         self.api_key = api_key if api_key is not None else (os.getenv("BITLIBERA_API_KEY") or "")
         self.timeout = timeout
         self.session = session

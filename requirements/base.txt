@@ -6,6 +6,9 @@ psycopg[binary]~=3.2.0
 python-dotenv~=1.0
 python-barcode~=0.15.0
 Pillow~=12.3.0
+gunicorn~=23.0
+whitenoise~=6.9
+django-cors-headers~=4.7
 # Provider clients — integrations/ (plain Python packages, not Django apps).
 requests~=2.33.0
 websockets~=15.0.1

@@ -31,6 +31,7 @@ def _required(name: str) -> str:
 
 SECRET_KEY = _required("DJANGO_SECRET_KEY")
 DEBUG = (os.getenv("DJANGO_DEBUG") or "False").lower() == "true"
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 ALLOWED_HOSTS = [
     host.strip()
     for host in (os.getenv("DJANGO_ALLOWED_HOSTS") or "localhost,127.0.0.1").split(",")
@@ -47,6 +48,7 @@ INSTALLED_APPS = [
     "rest_framework",
     "rest_framework_simplejwt",
     "drf_spectacular",
+    "corsheaders",
     "accounts",
     "products",
     "ledger",
@@ -59,6 +61,8 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
@@ -141,6 +145,7 @@ SIMPLE_JWT = {
 FOBOS_USE_DEMO_ADAPTERS = (
     os.getenv("FOBOS_USE_DEMO_ADAPTERS") or ("true" if DEBUG else "false")
 ).lower() == "true"
+FOBOS_USE_LIVE_ADAPTERS = (os.getenv("FOBOS_USE_LIVE_ADAPTERS") or "false").lower() == "true"
 
 # ---------------------------------------------------------------------------
 # Provider credentials (doc §18, §47) — all OPTIONAL at startup: the demo
@@ -159,6 +164,9 @@ BLINK_WSS_URL = os.getenv("BLINK_WSS_URL") or "wss://ws.blink.sv/graphql"
 BITLIBERA_BASE_URL = os.getenv("BITLIBERA_BASE_URL") or ""
 BITLIBERA_MERCHANT_ID = os.getenv("BITLIBERA_MERCHANT_ID") or ""
 BITLIBERA_API_KEY = os.getenv("BITLIBERA_API_KEY") or ""
+YADIO_API_URL = os.getenv("YADIO_API_URL") or "https://api.yadio.io"
+YADIO_RATE_CACHE_SECONDS = int(os.getenv("YADIO_RATE_CACHE_SECONDS") or "15")
+YADIO_RATE_MAX_AGE_SECONDS = int(os.getenv("YADIO_RATE_MAX_AGE_SECONDS") or "300")
 
 # Fixed company Lumicash number (doc §24/§47) — used as the settlement or
 # debit-side recipient when the provider contract requires it. Per-customer
@@ -186,11 +194,19 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = "static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
+STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+MEDIA_ROOT = Path(os.getenv("MEDIA_ROOT") or BASE_DIR / "media")
+CORS_ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in (os.getenv("CORS_ALLOWED_ORIGINS") or "").split(",")
+    if origin.strip()
+]
+CORS_ALLOW_ALL_ORIGINS = (os.getenv("CORS_ALLOW_ALL_ORIGINS") or "false").lower() == "true"
 
 # Local file storage (Docker named volume `media`, mounted at /app/media).
 # Product barcode images are persisted here — swap MEDIA_ROOT/DEFAULT_FILE_STORAGE
 # for an object store (S3/MinIO) when the infra is provisioned.
-MEDIA_URL = "media/"
-MEDIA_ROOT = BASE_DIR / "media"
+MEDIA_URL = "/media/"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"

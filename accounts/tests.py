@@ -1,6 +1,5 @@
 import pytest
 from django.core import mail
-from django.core.mail.message import EmailMultiAlternatives
 from django.test import override_settings
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import AccessToken
@@ -27,24 +26,19 @@ def client() -> APIClient:
 
 @pytest.mark.django_db
 @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
-def test_signup_creates_user_business_and_sends_verification_email(client: APIClient) -> None:
+def test_signup_creates_verified_user_without_sending_email(client: APIClient) -> None:
     response = client.post("/auth/signup", SIGNUP_PAYLOAD, format="json")
 
     assert response.status_code == 201
     user = User.objects.get(email="alice@example.com")
     assert user.role == User.Role.OWNER
-    assert user.email_verified is False
+    assert user.email_verified is True
+    assert user.email_verified_at is not None
     business = Business.objects.get(owner=user)
     assert business.name == "Chez Alice"
     assert business.settlement_preference == Business.SettlementPreference.BIF_LUMICASH
     assert user.business_id == business.id
-    assert len(mail.outbox) == 1
-    message = mail.outbox[0]
-    if not isinstance(message, EmailMultiAlternatives):
-        pytest.fail("expected an EmailMultiAlternatives message")
-    html = str(message.alternatives[0][0])
-    assert "Vérifier mon email" in html
-    assert "http://localhost:8000/auth/verify-email/" in html
+    assert mail.outbox == []
 
 
 @pytest.mark.django_db
@@ -88,15 +82,15 @@ def test_verify_email_rejects_expired_token(client: APIClient) -> None:
 
 @pytest.mark.django_db
 @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
-def test_login_blocked_before_verification(client: APIClient) -> None:
+def test_login_allows_account_without_email_verification(client: APIClient) -> None:
     User.objects.create_user(email="dave@example.com", name="Dave", password="supersecret123")
     response = client.post(
         "/auth/login",
         {"email": "dave@example.com", "password": "supersecret123"},
         format="json",
     )
-    assert response.status_code == 401
-    assert "email_not_verified" in response.json().get("code", "")
+    assert response.status_code == 200
+    assert "access" in response.json()
 
 
 @pytest.mark.django_db
@@ -125,7 +119,7 @@ def test_login_works_after_verification(client: APIClient) -> None:
 
 @pytest.mark.django_db
 @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
-def test_owner_creates_cashier_with_verification_email(owner_client: APIClient) -> None:
+def test_owner_creates_cashier_ready_to_log_in(owner_client: APIClient) -> None:
     response = owner_client.post(
         "/auth/cashiers",
         {
@@ -140,17 +134,12 @@ def test_owner_creates_cashier_with_verification_email(owner_client: APIClient) 
     assert response.status_code == 201
     body = response.json()
     assert body["role"] == "cashier"
-    assert body["email_verified"] is False
+    assert body["email_verified"] is True
     assert "password" not in body
     user = User.objects.get(email="bob@example.com")
     assert user.role == User.Role.CASHIER
     assert str(user.business_id) == body["business"]
-    assert len(mail.outbox) == 1
-    message = mail.outbox[0]
-    if not isinstance(message, EmailMultiAlternatives):
-        pytest.fail("expected an EmailMultiAlternatives message")
-    html = str(message.alternatives[0][0])
-    assert "http://localhost:8000/auth/verify-email/" in html
+    assert mail.outbox == []
 
 
 @pytest.mark.django_db
@@ -276,7 +265,7 @@ def test_owner_updates_cashier_password(owner_client: APIClient, cashier: User) 
 
 @pytest.mark.django_db
 @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
-def test_owner_changes_cashier_email_resends_verification(
+def test_owner_changes_cashier_email_without_verification(
     owner_client: APIClient, cashier: User
 ) -> None:
     response = owner_client.patch(
@@ -284,12 +273,12 @@ def test_owner_changes_cashier_email_resends_verification(
     )
 
     assert response.status_code == 200
-    assert response.json()["email_verified"] is False
+    assert response.json()["email_verified"] is True
     cashier.refresh_from_db()
     assert cashier.email == "renewed@example.com"
-    assert cashier.email_verified is False
-    assert cashier.email_verified_at is None
-    assert len(mail.outbox) == 1
+    assert cashier.email_verified is True
+    assert cashier.email_verified_at is not None
+    assert mail.outbox == []
 
 
 @pytest.mark.django_db

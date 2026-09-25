@@ -1,16 +1,43 @@
+from django.utils import timezone
 from rest_framework import serializers
-from rest_framework.exceptions import AuthenticationFailed
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 from .models import Business, User
-from .services import send_verification_email
 
 
-class EmailNotVerifiedError(AuthenticationFailed):
-    """Raised by the login serializer when the account is unverified."""
+class BusinessSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Business
+        fields = ["id", "name", "category", "settlement_preference", "lumicash_number", "blink_username"]
+        read_only_fields = ["id"]
 
-    default_detail = "Email not verified. Check your inbox for the verification link."
-    default_code = "email_not_verified"
+    def validate(self, attrs):
+        preference = attrs.get("settlement_preference", self.instance.settlement_preference)
+        phone = attrs.get("lumicash_number", self.instance.lumicash_number)
+        blink = attrs.get("blink_username", self.instance.blink_username)
+        if preference == Business.SettlementPreference.BIF_LUMICASH and not phone:
+            raise serializers.ValidationError({"lumicash_number": "Required for BIF settlement."})
+        if preference == Business.SettlementPreference.AS_IS and not blink:
+            raise serializers.ValidationError({"blink_username": "Required for Blink settlement."})
+        return attrs
+
+
+class AuthenticatedUserSerializer(serializers.ModelSerializer):
+    business_id = serializers.UUIDField(read_only=True, allow_null=True)
+
+    class Meta:
+        model = User
+        fields = ["id", "email", "name", "phone", "role", "business_id"]
+        read_only_fields = fields
+
+
+class SignupResponseSerializer(serializers.ModelSerializer):
+    detail = serializers.CharField(read_only=True)
+
+    class Meta:
+        model = User
+        fields = ["id", "email", "detail"]
+        read_only_fields = fields
 
 
 class SignupSerializer(serializers.Serializer):
@@ -50,6 +77,10 @@ class SignupSerializer(serializers.Serializer):
             raise serializers.ValidationError(
                 {"blink_username": "Required when settlement_preference is as_is."}
             )
+        if not attrs.get("blink_username", "").strip():
+            raise serializers.ValidationError(
+                {"blink_username": "A Blink username is required to receive QR payments."}
+            )
         return attrs
 
     def create(self, validated_data: dict) -> User:
@@ -59,6 +90,8 @@ class SignupSerializer(serializers.Serializer):
             password=validated_data["password"],
             phone=validated_data.get("phone", ""),
             role=User.Role.OWNER,
+            email_verified=True,
+            email_verified_at=timezone.now(),
         )
         business = Business.objects.create(
             name=validated_data["business_name"],
@@ -80,12 +113,11 @@ class SignupSerializer(serializers.Serializer):
         from subscriptions.services import create_trial
 
         create_trial(business=business)
-        send_verification_email(user.pk, user.email)
         return user
 
 
 class CashierCreateSerializer(serializers.ModelSerializer):
-    """Owner creates a cashier for their business — email verified before first login."""
+    """Owner creates a cashier who can use their account immediately."""
 
     password = serializers.CharField(write_only=True, min_length=8)
 
@@ -112,8 +144,9 @@ class CashierCreateSerializer(serializers.ModelSerializer):
             phone=validated_data.get("phone", ""),
             role=User.Role.CASHIER,
             business=validated_data["business"],
+            email_verified=True,
+            email_verified_at=timezone.now(),
         )
-        send_verification_email(user.pk, user.email)
         return user
 
 
@@ -121,8 +154,7 @@ class CashierSerializer(serializers.ModelSerializer):
     """Read + update (PUT/PATCH) of an owner's cashier — password optional on update.
 
     `role`, `business` and `email_verified` are read-only: an owner cannot promote a
-    cashier, move them to another business, or skip email verification. Changing the
-    email resets `email_verified` and sends a fresh verification link.
+    cashier, move them to another business, or change the verification metadata.
     """
 
     password = serializers.CharField(write_only=True, required=False, min_length=8)
@@ -151,23 +183,17 @@ class CashierSerializer(serializers.ModelSerializer):
         if password:
             instance.set_password(password)
         if email_changed:
-            instance.email_verified = False
-            instance.email_verified_at = None
+            instance.email_verified = True
+            instance.email_verified_at = timezone.now()
         instance.save()
-        if email_changed:
-            send_verification_email(instance.pk, instance.email)
         return instance
 
 
 class FobosTokenObtainPairSerializer(TokenObtainPairSerializer):
-    """JWT pair that refuses unverified emails and embeds the role claim (§4)."""
+    """JWT pair that embeds the user's role claim (§4)."""
 
     def validate(self, attrs: dict) -> dict:
-        data = super().validate(attrs)
-        user = self.user
-        if user is not None and not user.email_verified:
-            raise EmailNotVerifiedError()
-        return data
+        return super().validate(attrs)
 
     @classmethod
     def get_token(cls, user: User):  # type: ignore[override]

@@ -1,7 +1,7 @@
 """Checkout + payment confirmation services (Tech Spec §3 steps 1–2).
 
-- `create_checkout_payment` builds a pending Payment for a cart and asks the
-  adapter (interface only — real adapters belong to Backend Dev B) for an invoice.
+- `create_checkout_payment` freezes a cart and asks Blink for a Lightning invoice
+  or confirms cash immediately. Lumicash OTP uses the separate BitLibera adapter.
 - `create_subscription_payment` does the same for a SaaS subscription purchase
   (doc §41): the payment is frozen with `purpose=subscription` and an offer
   snapshot that the subscription layer activates from on confirmation.
@@ -45,6 +45,9 @@ def create_checkout_payment(
     lines: list[dict[str, Any]] | None = None,
     amount: Decimal | None = None,
     currency: str = "BIF",
+    payment_method: str = "qr",
+    customer_phone: str = "",
+    amount_tendered: Decimal | None = None,
 ) -> Payment:
     """POST /cart/checkout — Tech Spec §3 step 1."""
     business = user.business
@@ -54,30 +57,66 @@ def create_checkout_payment(
         raise CheckoutError(f"Unsupported currency '{currency}'.", code="bad_currency")
 
     snapshots, total = _resolve_cart(business, lines=lines, amount=amount)
-    rail = rails_by_settlement_preference(business.settlement_preference)
-    adapter = get_adapter(rail)  # raises AdapterNotInstalled if missing
-
+    if currency != "BIF":
+        raise CheckoutError(
+            "Catalog checkout totals are denominated in BIF. Blink converts that total "
+            "to the business's configured USD or BTC wallet."
+        )
+    if total != total.to_integral_value():
+        raise CheckoutError("BIF checkout totals must be whole-number amounts.")
     order_id = uuid.uuid4().hex
-    invoice = adapter.create_invoice(
-        amount=total, currency=currency, business=business, order_id=order_id
-    )
+    if payment_method not in {"qr", "lumicash_otp", "cash"}:
+        raise CheckoutError("Unsupported payment method.", code="bad_payment_method")
+    if payment_method == "cash":
+        if currency != "BIF":
+            raise CheckoutError("Cash payments must be in BIF.", code="bad_currency")
+        if amount_tendered is None or amount_tendered < total:
+            raise CheckoutError("Cash tendered must cover the order total.", code="insufficient_tender")
+        rail = Payment.Rail.CASH
+        invoice = None
+    elif payment_method == "lumicash_otp":
+        rail = Payment.Rail.BITLIBERA_ONRAMP
+        invoice = None
+        if not customer_phone:
+            raise CheckoutError("A customer Lumicash phone is required.", code="phone_required")
+    else:
+        rail = rails_by_settlement_preference(business.settlement_preference)
+        adapter = get_adapter(rail)
+        invoice = adapter.create_invoice(
+            amount=total, currency=currency, business=business, order_id=order_id
+        )
 
     payment = Payment.objects.create(
         business=business,
         rail=rail,
         order_id=order_id,
-        payment_request=invoice.payment_request,
+        payment_request=invoice.payment_request if invoice else "",
         lines=snapshots,
         currency=currency,
         amount_bif=(
             int(total)
             if currency == "BIF"
-            else (int(invoice.amount_bif) if invoice.amount_bif is not None else None)
+            else (int(invoice.amount_bif) if invoice and invoice.amount_bif is not None else None)
         ),
-        amount_sats=invoice.amount_sats,
+        amount_sats=invoice.amount_sats if invoice else None,
+        amount_tendered=amount_tendered,
+        lumicash_phone=customer_phone if payment_method == "lumicash_otp" else "",
+        settlement_currency=(invoice.settlement_currency if invoice else "BIF") or "BIF",
+        settlement_amount=(invoice.settlement_amount if invoice else total),
+        exchange_rate=invoice.exchange_rate if invoice else None,
+        rate_source=invoice.rate_source if invoice else "",
+        rate_timestamp=invoice.rate_timestamp if invoice else None,
         purpose=Payment.Purpose.CHECKOUT,
         status=Payment.Status.PENDING,
     )
+    if payment_method == "cash":
+        confirm_payment(
+            order_id=payment.order_id,
+            amount_bif=int(total),
+            actor=user.email,
+            metadata={"amount_tendered": str(amount_tendered), "change": str(amount_tendered - total)},
+        )
+        payment.refresh_from_db()
     return payment
 
 
@@ -136,6 +175,12 @@ def create_subscription_payment(
         lines=snapshots,
         currency="BIF",
         amount_bif=int(amount),
+        amount_sats=invoice.amount_sats,
+        settlement_currency=(invoice.settlement_currency or "BIF"),
+        settlement_amount=invoice.settlement_amount,
+        exchange_rate=invoice.exchange_rate,
+        rate_source=invoice.rate_source,
+        rate_timestamp=invoice.rate_timestamp,
         purpose=Payment.Purpose.SUBSCRIPTION,
         status=Payment.Status.PENDING,
     )
@@ -217,6 +262,25 @@ def confirm_payment(
             return existing
 
         confirmed_at = confirmed_at or timezone.now()
+        event_metadata = metadata.copy() if metadata else {}
+        if payment.rate_source:
+            event_metadata.update(
+                {
+                    "rate_source": payment.rate_source,
+                    "rate_timestamp": (
+                        payment.rate_timestamp.isoformat() if payment.rate_timestamp else None
+                    ),
+                    "exchange_rate": (
+                        str(payment.exchange_rate) if payment.exchange_rate is not None else None
+                    ),
+                    "settlement_currency": payment.settlement_currency,
+                    "settlement_amount": (
+                        str(payment.settlement_amount)
+                        if payment.settlement_amount is not None
+                        else None
+                    ),
+                }
+            )
         event = FinancialEvent.objects.create(
             business=payment.business,
             type=FinancialEvent.EventType.PAYMENT_CONFIRMED,
@@ -227,7 +291,7 @@ def confirm_payment(
             status=FinancialEvent.Status.CONFIRMED,
             actor=actor,
             reference=order_id,
-            metadata=metadata or {},
+            metadata=event_metadata,
         )
         # Synchronous signal runs handle_financial_event inside this transaction.
         payment.financial_event = event

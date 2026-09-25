@@ -1,16 +1,14 @@
-"""FOBOS-generated product barcodes (Tech Spec §8 step 3 / owner-facing).
+"""Create and render FOBOS internal-use EAN-13 product barcodes.
 
-When a product is created without a manufacturer barcode, we encode its
-identity into a scannable code: `F.` + base64url(name | price | product_id).
-Scanning it returns the product without relying on a lookup table for the
-encoded fields — the DB lookup is done on the authoritative product id.
-
-Manufacturer barcodes (numeric, e.g. EAN) are kept as-is and matched exactly.
+Codes use the GS1 restricted-circulation 20 prefix and are unique within a
+merchant catalog. Legacy ``F.`` barcodes remain decodable for existing items.
+Manufacturer barcodes are stored as supplied and matched exactly.
 """
 
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import uuid as uuid_module
 from decimal import Decimal
@@ -18,6 +16,26 @@ from typing import NamedTuple
 
 BARCODE_PREFIX = "F."
 MAX_NAME_CHARS = 24
+INTERNAL_EAN_PREFIX = "20"
+
+
+def calculate_ean13_check_digit(twelve_digits: str) -> str:
+    """Return the GS1 Modulo 10 check digit for a 12-digit EAN body."""
+    if len(twelve_digits) != 12 or not twelve_digits.isdigit():
+        raise ValueError("A 12-digit sequence is required to calculate an EAN-13 check digit.")
+    total = sum(
+        int(digit) * (1 if index % 2 == 0 else 3)
+        for index, digit in enumerate(twelve_digits)
+    )
+    return str((-total) % 10)
+
+
+def build_internal_ean13(*, product_id, business_id) -> str:
+    """Build a deterministic 13-digit internal code scoped to a business."""
+    seed = f"{business_id}:{product_id}".encode("utf-8")
+    item_number = int.from_bytes(hashlib.sha256(seed).digest()[:8], "big") % 10_000_000_000
+    body = f"{INTERNAL_EAN_PREFIX}{item_number:010d}"
+    return f"{body}{calculate_ean13_check_digit(body)}"
 
 
 class BarcodePayload(NamedTuple):
