@@ -29,8 +29,8 @@ skips = ["B101", "B107"]
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "config.settings"
 python_files = ["tests.py", "test_*.py", "*_tests.py"]
-addopts = "--cov=config --cov=accounts --cov=products --cov=ledger --cov=sales --cov=payments --cov=automation --cov-report=term-missing --cov-report=xml:coverage.xml --cov-fail-under=80 --junitxml=junit.xml"
-testpaths = ["accounts", "products", "ledger", "sales", "payments", "automation"]
+addopts = "--cov=config --cov=accounts --cov=products --cov=ledger --cov=sales --cov=payments --cov=automation --cov=integrations --cov=subscriptions --cov-report=term-missing --cov-report=xml:coverage.xml --cov-fail-under=80 --junitxml=junit.xml"
+testpaths = ["accounts", "products", "ledger", "sales", "payments", "automation", "integrations", "subscriptions"]
 
 [tool.coverage.run]
 omit = [

@@ -105,6 +105,10 @@ class SignupSerializer(serializers.Serializer):
         from automation.services import ensure_default_rule
 
         ensure_default_rule(business)
+        # Grant the 3-day SaaS trial (§55) — idempotent on the business.
+        from subscriptions.services import create_trial
+
+        create_trial(business=business)
         return user
 
 

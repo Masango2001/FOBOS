@@ -101,7 +101,106 @@ class TestProductRead:
 
 
 @pytest.mark.django_db
-class TestBarcodeImage:
+class TestProductDetail:
+    def test_owner_can_get_product(self, owner_client, product):
+        response = owner_client.get(f"/products/{product.id}")
+        assert response.status_code == 200
+        assert response.json()["id"] == str(product.id)
+
+    def test_cashier_can_read_but_not_write(self, cashier_client, product):
+        assert cashier_client.get(f"/products/{product.id}").status_code == 200
+        patch = cashier_client.patch(f"/products/{product.id}", {"name": "Hack"}, format="json")
+        assert patch.status_code == 403
+        assert cashier_client.delete(f"/products/{product.id}").status_code == 403
+
+    def test_cross_business_get_returns_404(self, owner_client, product):
+        from accounts.models import Business, User
+        from rest_framework.test import APIClient
+        from rest_framework_simplejwt.tokens import AccessToken
+
+        other_owner = User.objects.create_user(
+            email="other@fobos.test", name="Other", password="supersecret123", role="owner"
+        )
+        other = Business.objects.create(name="Other", owner=other_owner)
+        other_owner.business = other
+        other_owner.save(update_fields=["business"])
+
+        client = APIClient()
+        client.credentials(HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(other_owner)}")
+        assert client.get(f"/products/{product.id}").status_code == 404
+
+    def test_owner_can_patch_product(self, owner_client, product):
+        response = owner_client.patch(
+            f"/products/{product.id}", {"unit_price": "300.00"}, format="json"
+        )
+        assert response.status_code == 200
+        product.refresh_from_db()
+        assert product.unit_price == 300
+
+    def test_owner_can_delete_product(self, owner_client, business):
+        product = business.products.create(name="Temp", barcode="7777", unit_price=10)
+        assert owner_client.delete(f"/products/{product.id}").status_code == 204
+
+    def test_delete_product_with_movements_conflicts(self, owner_client, product):
+        from products.models import StockMovement
+
+        StockMovement.objects.create(
+            business=product.business,
+            product=product,
+            type=StockMovement.MovementType.RESTOCK,
+            qty_delta=10,
+            qty_after=10,
+        )
+        assert owner_client.delete(f"/products/{product.id}").status_code == 409
+
+    def test_duplicate_barcode_on_update_rejected(self, owner_client, product, business):
+        business.products.create(name="Other", barcode="9999", unit_price=5)
+        response = owner_client.patch(f"/products/{product.id}", {"barcode": "9999"}, format="json")
+        assert response.status_code == 400
+
+
+@pytest.mark.django_db
+class TestProductUpdateRegeneratesBarcode:
+    def test_update_price_regenerates_fobos_barcode(self, owner_client, business):
+        payload = {"name": "Sap", "unit_cost": "50.00", "unit_price": "150.00", "stock_qty": 0}
+        created = owner_client.post("/products", payload, format="json").json()
+        first = created["barcode"]
+        assert first.startswith("F.")
+
+        response = owner_client.patch(
+            f"/products/{created['id']}", {"unit_price": "175.00"}, format="json"
+        )
+        assert response.status_code == 200
+        refreshed = response.json()["barcode"]
+        assert refreshed != first
+        assert parse_product_barcode(refreshed).price == "175.00"
+
+    def test_update_name_regenerates_fobos_barcode(self, owner_client, product):
+        # Product created WITHOUT a barcode gets a FOBOS-generated one; renaming
+        # it must re-encode the new name into the code.
+        created = owner_client.post(
+            "/products",
+            {"name": "Sap", "unit_cost": "50.00", "unit_price": "150.00", "stock_qty": 0},
+            format="json",
+        ).json()
+        assert created["barcode"].startswith("F.")
+
+        response = owner_client.patch(
+            f"/products/{created['id']}", {"name": "Renamed Soda"}, format="json"
+        )
+        assert response.status_code == 200
+        refreshed = response.json()["barcode"]
+        assert refreshed != created["barcode"]
+        assert parse_product_barcode(refreshed).name == "Renamed Soda"
+
+    def test_update_manufacturer_barcode_is_never_overwritten(self, owner_client, product):
+        response = owner_client.patch(
+            f"/products/{product.id}", {"unit_price": "300.00"}, format="json"
+        )
+        assert response.status_code == 200
+        product.refresh_from_db()
+        assert product.barcode == "6161"  # manufacturer value kept, not regenerated
+
     def test_creating_product_persists_png_and_returns_url(self, owner_client, owner):
         response = owner_client.post(
             "/products",

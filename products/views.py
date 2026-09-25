@@ -1,6 +1,7 @@
 """Product + inventory read endpoints (Tech Spec §4, §8 step 3/6)."""
 
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
+from django.db.models.deletion import ProtectedError
 from rest_framework import generics, serializers, status
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
@@ -14,7 +15,12 @@ from config.openapi import ApiErrorSerializer
 
 from .models import Product
 from .serializers import ProductSerializer
-from .services import build_internal_ean13, parse_product_barcode
+from .services import (
+    BARCODE_PREFIX,
+    build_internal_ean13,
+    build_product_barcode,
+    parse_product_barcode,
+)
 
 
 class ProductListCreateView(generics.ListCreateAPIView):
@@ -49,6 +55,58 @@ class ProductListCreateView(generics.ListCreateAPIView):
             raise ValidationError(
                 {"barcode": "A product with this barcode already exists for your business."}
             ) from None
+
+
+class ProductDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """GET/PATCH/PUT/DELETE /products/:id — reads for any business user, writes owner-only.
+
+    Queryset is business-scoped, so a cross-business lookup returns 404 (same
+    isolation guarantee as the list). A FOBOS-generated barcode (prefixed "F.")
+    is regenerated on every write that does not supply a new barcode, so the
+    code always matches the latest name / price / product id.
+    """
+
+    serializer_class = ProductSerializer
+    permission_classes = [IsAuthenticated, HasBusiness]
+
+    def get_permissions(self):
+        if self.request.method in ("PATCH", "PUT", "DELETE"):
+            return [IsAuthenticated(), IsOwner()]
+        return [IsAuthenticated(), HasBusiness()]
+
+    def get_queryset(self):
+        return Product.objects.filter(business=self.request.user.business)
+
+    def perform_update(self, serializer) -> None:
+        try:
+            product = serializer.save()
+            if product.barcode and product.barcode.startswith(BARCODE_PREFIX):
+                # Keep a FOBOS-generated code in sync with the updated fields;
+                # manufacturer codes are never overwritten.
+                payload = parse_product_barcode(product.barcode)
+                if payload is None or (
+                    payload.name != product.name[:24]
+                    or payload.price != str(product.unit_price)
+                    or payload.product_id != str(product.id)
+                ):
+                    product.barcode = build_product_barcode(
+                        name=product.name, price=product.unit_price, product_id=product.id
+                    )
+                    product.save(update_fields=["barcode"])
+        except IntegrityError:
+            raise ValidationError(
+                {"barcode": "A product with this barcode already exists for your business."}
+            ) from None
+
+    @transaction.atomic
+    def destroy(self, request, *args, **kwargs):
+        try:
+            return super().destroy(request, *args, **kwargs)
+        except ProtectedError:
+            return Response(
+                {"detail": "Cannot delete: product has stock movements or sale lines."},
+                status=status.HTTP_409_CONFLICT,
+            )
 
 
 class ProductScanView(APIView):

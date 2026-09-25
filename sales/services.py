@@ -26,8 +26,12 @@ class InsufficientStockError(Exception):
     """Raised when a product cannot cover the requested quantity — rolls everything back."""
 
 
-def handle_financial_event(event: FinancialEvent) -> Sale:
-    """Create the business state for a confirmed payment — atomic and idempotent."""
+def handle_financial_event(event: FinancialEvent) -> Sale | None:
+    """Create the business state for a confirmed payment — atomic and idempotent.
+
+    Returns the created/loaded Sale, or ``None`` for a confirmed subscription
+    payment (doc §41: no cart — the SaaS layer activates the Subscription).
+    """
     existing = Sale.objects.filter(financial_event=event).first()
     if existing is not None:
         return existing
@@ -47,6 +51,14 @@ def handle_financial_event(event: FinancialEvent) -> Sale:
         )
         if payment is None:
             raise ValueError(f"No payment backing FinancialEvent {event.pk}")
+
+        # Doc §41: a confirmed purpose=subscription payment has no cart to
+        # settle — the SaaS layer activates the Subscription (payments signal
+        # → subscriptions.services.activate_from_payment). No Sale/Receipt or
+        # REVENUE/COGS entries are produced for it.
+        if payment.purpose == Payment.Purpose.SUBSCRIPTION:
+            logger.info("Subscription payment %s confirmed — no cart to process.", payment.order_id)
+            return None
 
         # Duplicate confirmation must never create duplicate financial records.
         if payment.financial_event_id is not None and payment.financial_event_id != event.pk:

@@ -1,7 +1,8 @@
 """Payment API serializers — shapes agreed with the Frontend (cashier contract).
 
-Canonical status enum returned to clients: pending | confirmed | failed | expired
-(provider states like PENDING_PAYMENT are internal to the payment rail adapters).
+Canonical status enum returned to clients: pending | paid | failed | expired |
+cancelled (adapter/provider states like PENDING_PAYMENT are internal to the payment
+rail adapters). purpose distinguishes checkout vs subscription (doc §40–41).
 """
 
 from rest_framework import serializers
@@ -22,6 +23,10 @@ class PaymentSerializer(serializers.ModelSerializer):
             "payment_request",
             "amount_bif",
             "amount_sats",
+            "currency",
+            "settlement_currency",
+            "purpose",
+            "rail",
             "lumicash_phone",
             "status",
             "confirmed_at",
@@ -61,3 +66,15 @@ class OnrampConfirmSerializer(serializers.Serializer):
 
     otp = serializers.CharField(max_length=10)
     order_id = serializers.CharField(max_length=64)
+
+
+class BlinkWebhookSerializer(serializers.Serializer):
+    """POST /payments/webhooks/blink — rail → FOBOS order confirmation (Tech Spec §27–28).
+
+    Accepts the canonical envelope (`order_id`) and the flat form (`orderId`).
+    """
+
+    order_id = serializers.CharField(max_length=64, required=False, allow_blank=True)
+    orderId = serializers.CharField(max_length=64, required=False, allow_blank=True)
+    status = serializers.CharField(max_length=32, required=False, allow_blank=True)
+    confirmed_at = serializers.DateTimeField(required=False, allow_null=True)

@@ -7,11 +7,16 @@ from django.utils import timezone
 
 from accounts.models import Business
 
-CURRENCIES = (
-    ("BIF", "Burundian Franc"),
-    ("USD", "US Dollar"),
-    ("SAT", "Sats"),
-)
+
+class Currency(models.TextChoices):
+    """Single shared currency choice set (BIF reference currency, §2)."""
+
+    BIF = "BIF", "Burundian Franc"
+    USD = "USD", "US Dollar"
+    SAT = "SAT", "Sats"
+
+
+CURRENCIES = Currency.choices
 
 
 class FinancialEvent(models.Model):
@@ -43,7 +48,7 @@ class FinancialEvent(models.Model):
     )
     type = models.CharField(max_length=32, choices=EventType.choices)
     amount = models.DecimalField(max_digits=20, decimal_places=2, default=0)
-    currency = models.CharField(max_length=3, choices=CURRENCIES, default="BIF")
+    currency = models.CharField(max_length=3, choices=Currency, default=Currency.BIF)
     timestamp = models.DateTimeField(default=timezone.now)
     source = models.CharField(max_length=32, choices=Source.choices)
     status = models.CharField(max_length=16, choices=Status.choices)
@@ -82,7 +87,7 @@ class LedgerEntry(models.Model):
     type = models.CharField(max_length=8, choices=MovementType.choices)
     account = models.CharField(max_length=64)
     amount = models.DecimalField(max_digits=20, decimal_places=2)
-    currency = models.CharField(max_length=3, choices=CURRENCIES, default="BIF")
+    currency = models.CharField(max_length=3, choices=Currency, default=Currency.BIF)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

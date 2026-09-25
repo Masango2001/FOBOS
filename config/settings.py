@@ -53,6 +53,7 @@ INSTALLED_APPS = [
     "products",
     "ledger",
     "sales",
+    "subscriptions",
     "payments",
     "automation",
 ]
@@ -125,6 +126,11 @@ SPECTACULAR_SETTINGS = {
     ),
     "VERSION": "0.1.0",
     "SERVE_INCLUDE_SCHEMA": False,
+    "ENUM_NAME_OVERRIDES": {
+        # currency and settlement_currency share the same choice set — merge the
+        # settlement enum into the single shared ledger.Currency enum.
+        "SettlementCurrencyEnum": "ledger.models.Currency",
+    },
 }
 
 SIMPLE_JWT = {
@@ -140,6 +146,29 @@ FOBOS_USE_DEMO_ADAPTERS = (
     os.getenv("FOBOS_USE_DEMO_ADAPTERS") or ("true" if DEBUG else "false")
 ).lower() == "true"
 FOBOS_USE_LIVE_ADAPTERS = (os.getenv("FOBOS_USE_LIVE_ADAPTERS") or "false").lower() == "true"
+
+# ---------------------------------------------------------------------------
+# Provider credentials (doc §18, §47) — all OPTIONAL at startup: the demo
+# adapters run without them and `integrations/` imports never read Django
+# settings (they stay plain packages). The real clients fail fast with a typed
+# error only when a protected provider call is made without configuration.
+# ---------------------------------------------------------------------------
+BLINK_API_URL = os.getenv("BLINK_API_URL") or ""
+BLINK_API_KEY = os.getenv("BLINK_API_KEY") or ""
+BLINK_USERNAME = os.getenv("BLINK_USERNAME") or ""
+BLINK_BTC_WALLET_ID = os.getenv("BLINK_BTC_WALLET_ID") or ""
+BLINK_USD_WALLET_ID = os.getenv("BLINK_USD_WALLET_ID") or ""
+BLINK_LIGHTNING_ADDRESS = os.getenv("BLINK_LIGHTNING_ADDRESS") or ""
+BLINK_WSS_URL = os.getenv("BLINK_WSS_URL") or "wss://ws.blink.sv/graphql"
+
+BITLIBERA_BASE_URL = os.getenv("BITLIBERA_BASE_URL") or ""
+BITLIBERA_MERCHANT_ID = os.getenv("BITLIBERA_MERCHANT_ID") or ""
+BITLIBERA_API_KEY = os.getenv("BITLIBERA_API_KEY") or ""
+
+# Fixed company Lumicash number (doc §24/§47) — used as the settlement or
+# debit-side recipient when the provider contract requires it. Per-customer
+# Lumicash numbers are business data stored with the transaction, never here.
+LUMICASH_PHONE = os.getenv("LUMICASH_PHONE") or ""
 
 # Email verification link
 EMAIL_VERIFICATION_MAX_AGE_SECONDS = int(

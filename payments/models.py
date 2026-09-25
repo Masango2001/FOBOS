@@ -5,7 +5,7 @@ import uuid
 from django.db import models
 
 from accounts.models import Business
-from ledger.models import FinancialEvent
+from ledger.models import Currency, FinancialEvent
 
 
 class Payment(models.Model):
@@ -16,10 +16,23 @@ class Payment(models.Model):
         CASH = "cash", "Cash"
 
     class Status(models.TextChoices):
+        """Internal FOBOS states (doc §24) — distinct from provider statuses.
+
+        Canonical API values exposed to clients: created|pending|paid|failed|
+        expired|cancelled. Provider states (e.g. Blink PENDING/PAID/EXPIRED)
+        are translated into these by the views/polling layer.
+        """
+
+        CREATED = "created", "created"
         PENDING = "pending", "pending"
-        CONFIRMED = "confirmed", "confirmed"
+        PAID = "paid", "paid"
         FAILED = "failed", "failed"
         EXPIRED = "expired", "expired"
+        CANCELLED = "cancelled", "cancelled"
+
+    class Purpose(models.TextChoices):
+        CHECKOUT = "checkout", "Cart checkout"
+        SUBSCRIPTION = "subscription", "SaaS subscription"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     business = models.ForeignKey(Business, on_delete=models.CASCADE, related_name="payments")
@@ -44,7 +57,19 @@ class Payment(models.Model):
         blank=True,
         help_text="Frozen cart snapshots [{product_id, quantity, unit_price, unit_cost}].",
     )
-    currency = models.CharField(max_length=3, default="BIF")
+    currency = models.CharField(max_length=3, choices=Currency, default=Currency.BIF)
+    settlement_currency = models.CharField(
+        max_length=3,
+        choices=Currency,
+        default=Currency.BIF,
+        help_text="Currency FOBOS expects to receive (doc §46).",
+    )
+    purpose = models.CharField(
+        max_length=16,
+        choices=Purpose.choices,
+        default=Purpose.CHECKOUT,
+        help_text="What the Payment pays for: checkout or subscription (doc §41).",
+    )
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.PENDING)
     created_at = models.DateTimeField(auto_now_add=True)
     confirmed_at = models.DateTimeField(null=True, blank=True)
